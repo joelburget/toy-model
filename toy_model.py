@@ -27,9 +27,16 @@ def loss_fn(I, y_pred, y_true):
 
 def train_model(model, config: TrainConfig):
     features: int = model.features
+
+    lower_bound, upper_bound = -10, 10
+
     # Start with random data
-    x_train = torch.rand(config.points, features)
-    x_test = torch.rand(config.points * 2, features)
+    x_train = torch.FloatTensor(config.points, features).uniform_(
+        lower_bound, upper_bound
+    )
+    x_test = torch.FloatTensor(config.points * 2, features).uniform_(
+        lower_bound, upper_bound
+    )
 
     # Then apply sparsity
     for x in [x_train, x_test]:
