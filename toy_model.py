@@ -1,0 +1,351 @@
+import plotly.express as px
+import torch
+import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
+import torch
+import einops
+import matplotlib.pyplot as plt
+import tqdm.auto as tqdm
+import pandas
+from dataclasses import dataclass
+from typing import Callable, List
+import pickle
+import os
+import plotly.graph_objects as go
+from numpy.typing import NDArray
+from plotly.subplots import make_subplots
+
+# from dash import dcc, html
+
+
+@dataclass
+class TrainConfig:
+    model: nn.Module
+    s: float  # sparsity
+    i: float = 0.7  # importance base
+    points: int = 8096
+    steps: int = 40_000
+    task: Callable[[torch.Tensor], torch.Tensor] = lambda x: x
+
+
+@dataclass
+class TrainResult:
+    config: TrainConfig
+    losses: List[float]
+    train: torch.Tensor
+    test: torch.Tensor
+
+    def save(self, path, mkdir=True):
+        if mkdir:
+            os.mkdir(path)
+        for name, attribute in self.__dict__.items():
+            name = ".".join((name, "pkl"))
+            with open("/".join((path, name)), "wb") as f:
+                pickle.dump(attribute, f)
+
+    @classmethod
+    def load(cls, path):
+        my_model = {}
+        for name in cls.__annotations__:
+            file_name = ".".join((name, "pkl"))
+            with open("/".join((path, file_name)), "rb") as f:
+                my_model[name] = pickle.load(f)
+        return cls(**my_model)
+
+
+# mean squared error weighted by feature importance
+def loss_fn(I, y_pred, y_true):
+    _, features = y_pred.shape
+    error = y_true - y_pred
+    # importance falls off geometrically
+    importance = torch.tensor([I**i for i in range(features)])
+    # TODO: use torch.MSELoss or torch.mse_error?
+    return torch.mean(error**2 * importance)
+
+
+def train_model(config: TrainConfig):
+    model = config.model
+    features: int = model.features
+    # Start with random data
+    x_train = torch.rand(config.points, features)
+    x_test = torch.rand(config.points * 2, features)
+
+    # Then apply sparsity
+    for x in [x_train, x_test]:
+        t = config.s * torch.ones(len(x), features)
+        mask = torch.bernoulli(t) > 0
+        x[mask] = 0
+
+    # Remove points that are completely zero
+    x_train = x_train[(x_train == 0).sum(axis=1) != 5]
+    x_test = x_test[(x_test == 0).sum(axis=1) != 5]
+
+    # Train model
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.98))
+
+    losses = []
+    for t in tqdm.tqdm(range(config.steps)):
+        prediction = model(x_train)
+        actual = config.task(x_train)
+        loss = loss_fn(config.i, prediction, actual)
+        losses.append(loss.item())
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+    return TrainResult(config, losses, x_train, x_test)
+
+
+def stack_plot_df(w):
+    _, cols = w.shape
+    fig = px.bar(
+        w, x="neuron", y=list(str(i) for i in range(cols - 1)), title="Stack Plot"
+    )
+    # fig.update(data=[{'hovertemplate':"neuron: %{x}<br />feature: %{variable}<br />value: %{value:.4f}"}])
+    return fig
+
+
+def mk_dataframe(w):
+    n_neurons, n_features = w.shape
+    w = np.concatenate([np.array(range(n_neurons))[:, None], w], axis=1)
+    return pandas.DataFrame(
+        w, columns=["neuron"] + list(str(i) for i in range(n_features))
+    )
+
+
+def stack_plot(w):
+    """w: neurons x features"""
+    return stack_plot_df(mk_dataframe(w))
+
+
+def weights_sankey(layers: List[NDArray]):
+    # layers: e.g. [m, n], [n, o]
+    # e.g. [neurons, features], [features, neurons]
+
+    nodes_seen = 0
+    sources, targets, values, colors, labels, node_names = [], [], [], [], [], []
+    xs, ys = [], []
+
+    n_inputs = layers[0].shape[1]
+    node_names += ["In" + str(n) for n in range(n_inputs)]
+
+    xs_space = np.linspace(0.01, 0.99, len(layers) + 1)
+    xs += [xs_space[0]] * n_inputs
+    ys += list(np.linspace(0.01, 0.99, n_inputs))
+    prev_layer_nodes = n_inputs
+
+    for layer_num, layer in enumerate(layers):
+        layer_name = chr(layer_num + ord("A"))
+        n_rows, n_cols = layer.shape
+        node_names += [layer_name + str(j) for j in range(n_rows)]
+        xs += [xs_space[layer_num + 1]] * n_rows
+        ys += list(np.linspace(0.01, 0.99, n_rows))
+        for i in range(n_cols):
+            for j in range(n_rows):
+                sources.append(nodes_seen + i)
+                targets.append(nodes_seen + prev_layer_nodes + j)
+                values.append(abs(layer[j, i]))
+                labels.append(f"{layer[j, i]:.2f}")
+                colors.append(
+                    "rgba(255,0,0, 0.3)" if layer[j, i] > 0 else "rgba(0,0,255, 0.3)"
+                )
+        nodes_seen += prev_layer_nodes
+        prev_layer_nodes = n_rows
+
+    return go.Figure(
+        layout_title_text="Weights",
+        data=[
+            go.Sankey(
+                node=dict(
+                    label=node_names,
+                    x=xs,
+                    y=ys,
+                ),
+                link=dict(
+                    source=sources,
+                    target=targets,
+                    value=values,
+                    label=labels,
+                    color=colors,
+                ),
+            )
+        ],
+    )
+
+
+class ToyModel(nn.Module):
+    def __init__(self, neurons=5, features=20):
+        super().__init__()
+        self.neurons = neurons
+        self.features = features
+        self.W = nn.Parameter(torch.randn(neurons, features))
+        self.b = nn.Parameter(torch.randn(features))
+
+    def forward(self, x):
+        x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
+        x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
+        x = x + self.b
+        x = F.relu(x)
+        return x
+
+    @staticmethod
+    def plot(train_result):
+        w = train_result.config.model.W.detach().numpy()
+        px.imshow((w.T @ w)).show()
+        px.imshow(w).show()
+        return plt.semilogy(train_result.losses)
+
+
+class ReluHiddenLayerModel(nn.Module):
+    def __init__(self, neurons, features):
+        super().__init__()
+        self.neurons = neurons
+        self.features = features
+        self.W = nn.Parameter(torch.randn(neurons, features))
+        self.b = nn.Parameter(torch.randn(features))
+
+    def forward(self, x):
+        x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
+        x = F.relu(x)
+        x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
+        x = x + self.b
+        x = F.relu(x)
+        return x
+
+    @staticmethod
+    def plot(train_result):
+        w = train_result.config.model.W.detach().numpy()
+        px.imshow(w.T).show()
+        return plt.semilogy(train_result.losses)
+
+
+class ReluHiddenLayerModelVariation(nn.Module):
+    def __init__(self, neurons=6, features=3):
+        super().__init__()
+        self.neurons = neurons
+        self.features = features
+        self.W1 = nn.Parameter(torch.randn(neurons, features))
+        self.W2 = nn.Parameter(torch.randn(features, neurons))
+        self.b = nn.Parameter(torch.randn(features))
+
+    def forward(self, x):
+        x = einops.einsum(self.W1, x, "inner outer, batch outer -> batch inner")
+        x = F.relu(x)
+        x = einops.einsum(self.W2, x, "outer inner, batch inner -> batch outer")
+        x = x + self.b
+        x = F.relu(x)
+        return x
+
+    @staticmethod
+    def plot(train_result):
+        model = train_result.config.model
+        w1 = model.W1.detach().numpy()
+        w2 = model.W2.detach().numpy()
+        px.imshow(w1.T, title="W1").show()
+        stack_plot(w1).show()
+        px.imshow(w2, title="W2").show()
+        stack_plot(w2.T).show()
+        px.bar(model.b.detach().numpy(), title="bias").show()
+        # return plt.semilogy(train_result.losses)
+
+    # attempt to plot all in one figure
+    @staticmethod
+    def plot_(train_result):
+        model = train_result.config.model
+        w1 = model.W1.detach().numpy()
+        w2 = model.W2.detach().numpy()
+
+        fig = make_subplots(
+            rows=3, cols=2, subplot_titles=["W1", "W1", "W2", "W2", "bias"]
+        )
+        p1 = px.imshow(w1.T, title="W1").data
+        p2 = stack_plot(w1).data
+        p3 = px.imshow(w2, title="W2").data
+        p4 = stack_plot(w2.T).data
+        p5 = px.bar(model.b.detach().numpy(), title="bias").data
+        fig.add_traces(
+            (list(p1) + list(p2) + list(p3) + list(p4) + list(p5)),
+            rows=(
+                [1] * (len(p1) + len(p2)) + [2] * (len(p3) + len(p4)) + [3] * len(p5)
+            ),
+            cols=(
+                [1] * len(p1)
+                + [2] * len(p2)
+                + [1] * len(p3)
+                + [2] * len(p4)
+                + [1] * len(p5)
+            ),
+        )
+        fig.update_layout(coloraxis=dict(colorscale="Bluered_r"), showlegend=False)
+        return fig
+
+    @staticmethod
+    def plots(train_result):
+        model = train_result.config.model
+        w1 = model.W1.detach().numpy()
+        w2 = model.W2.detach().numpy()
+
+        return (
+            px.imshow(w1.T, title="W1"),
+            stack_plot(w1),
+            px.imshow(w2, title="W2"),
+            stack_plot(w2.T),
+            px.bar(model.b.detach().numpy(), title="bias"),
+        )
+
+
+class MultipleHiddenLayerModel(nn.Module):
+    pass  # TODO
+
+
+class MLP(nn.Module):
+    def __init__(self, d_model=5, d_mlp=20):
+        super().__init__()
+        self.d_model = d_model
+        self.d_mlp = d_mlp
+        self.W_in = nn.Parameter(torch.randn(d_model, d_mlp))
+        self.b_in = nn.Parameter(torch.randn(d_mlp))
+        self.W_out = nn.Parameter(torch.randn(d_mlp, d_model))
+        self.b_out = nn.Parameter(torch.randn(d_model))
+
+    def forward(self, x):
+        x = einops.einsum(self.W_in, x, "d_model d_mlp, batch d_model -> batch d_mlp")
+        x = x + self.b_in
+        x = F.relu(x)
+        x = einops.einsum(self.W_out, x, "d_mlp d_model, batch d_mlp -> batch d_model")
+        x = x + self.b_out
+        return x
+
+
+class ResidualModel(nn.Module):
+    def __init__(self, features=20, d_model=5, d_mlp=20):
+        super().__init__()
+        self.features = features
+        self.d_model = d_model
+        self.d_mlp = d_mlp
+        self.W_E = nn.Parameter(torch.randn(features, d_model))
+        self.mlp = MLP(d_model, d_mlp)
+        self.W_U = nn.Parameter(torch.randn(d_model, features))
+
+    def forward(self, x):
+        x = einops.einsum(
+            self.W_E, x, "features d_model, batch features -> batch d_model"
+        )
+        x = self.mlp(x)
+        x = einops.einsum(
+            self.W_U, x, "d_model features, batch d_model -> batch features"
+        )
+        return x
+
+    @staticmethod
+    def plot(train_result):
+        model = train_result.config.model
+        w_e = model.W_E.detach().numpy()
+        w_u = model.W_U.detach().numpy()
+        px.imshow(w_e, title="W_E").show()
+        stack_plot(w_e.T).show()
+        px.imshow(w_u.T, title="W_U").show()
+        stack_plot(w_u).show()
+        # px.bar(model.b.detach().numpy(), title="bias").show()
+        # return plt.semilogy(train_result.losses)
