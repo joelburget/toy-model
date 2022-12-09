@@ -51,10 +51,16 @@ def train_model(model, config: TrainConfig):
     # Train model
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.98))
 
+    task = lambda x: x
+    if config.task == "SQUARE":
+        task = lambda x: x**2
+    elif config.task == "ABS":
+        task = lambda x: abs(x)
+
     losses = []
     for t in tqdm.tqdm(range(config.steps)):
         prediction = model(x_train)
-        actual = config.task(x_train)
+        actual = task(x_train)
         loss = loss_fn(config.i, prediction, actual)
         losses.append(loss.item())
         loss.backward()
