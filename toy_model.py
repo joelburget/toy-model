@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import einops
-import matplotlib.pyplot as plt
 import tqdm.auto as tqdm
 import pandas
 from typing import List
@@ -182,7 +181,6 @@ class ToyModel(nn.Module):
         w = train_result.model.W.detach().numpy()
         px.imshow((w.T @ w)).show()
         px.imshow(w).show()
-        return plt.semilogy(train_result.losses)
 
 
 class ReluHiddenLayerModel(nn.Module):
@@ -206,7 +204,6 @@ class ReluHiddenLayerModel(nn.Module):
     def plot(train_result):
         w = train_result.model.W.detach().numpy()
         px.imshow(w.T).show()
-        return plt.semilogy(train_result.losses)
 
 
 class ReluHiddenLayerModelVariation(nn.Module):
@@ -293,8 +290,6 @@ class MlpModel(nn.Module):
         stack_plot(w_e.T).show()
         px.imshow(w_u.T, title="W_U").show()
         stack_plot(w_u).show()
-        # px.bar(model.b.detach().numpy(), title="bias").show()
-        # return plt.semilogy(train_result.losses)
 
 
 class ResidualModel(nn.Module):
