@@ -225,49 +225,6 @@ class ReluHiddenLayerModelVariation(nn.Module):
         return x
 
     @staticmethod
-    def plot(train_result):
-        model = train_result.model
-        w1 = model.W1.detach().numpy()
-        w2 = model.W2.detach().numpy()
-        px.imshow(w1.T, title="W1").show()
-        stack_plot(w1).show()
-        px.imshow(w2, title="W2").show()
-        stack_plot(w2.T).show()
-        px.bar(model.b.detach().numpy(), title="bias").show()
-        # return plt.semilogy(train_result.losses)
-
-    # attempt to plot all in one figure
-    @staticmethod
-    def plot_(train_result):
-        model = train_result.model
-        w1 = model.W1.detach().numpy()
-        w2 = model.W2.detach().numpy()
-
-        fig = make_subplots(
-            rows=3, cols=2, subplot_titles=["W1", "W1", "W2", "W2", "bias"]
-        )
-        p1 = px.imshow(w1.T, title="W1").data
-        p2 = stack_plot(w1).data
-        p3 = px.imshow(w2, title="W2").data
-        p4 = stack_plot(w2.T).data
-        p5 = px.bar(model.b.detach().numpy(), title="bias").data
-        fig.add_traces(
-            (list(p1) + list(p2) + list(p3) + list(p4) + list(p5)),
-            rows=(
-                [1] * (len(p1) + len(p2)) + [2] * (len(p3) + len(p4)) + [3] * len(p5)
-            ),
-            cols=(
-                [1] * len(p1)
-                + [2] * len(p2)
-                + [1] * len(p3)
-                + [2] * len(p4)
-                + [1] * len(p5)
-            ),
-        )
-        fig.update_layout(coloraxis=dict(colorscale="Bluered_r"), showlegend=False)
-        return fig
-
-    @staticmethod
     def plots(train_result):
         model = train_result.model
         w1 = model.W1.detach().numpy()
