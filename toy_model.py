@@ -57,9 +57,12 @@ def train_model(model, config: TrainConfig):
 
     losses = []
     for t in tqdm.tqdm(range(config.steps)):
-        prediction = model(x_train)
+        prediction, l1_terms = model(x_train)
         actual = task(x_train)
-        loss = loss_fn(config.i, prediction, actual)
+        loss = (
+            loss_fn(config.i, prediction, actual)
+            + config.regularization_coeff * l1_terms.abs().sum()
+        )
         losses.append(loss.item())
         loss.backward()
         optimizer.step()
@@ -172,7 +175,7 @@ class ToyModel(nn.Module):
         x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
         x = x + self.b
         x = F.relu(x)
-        return x
+        return x, 0
 
     @staticmethod
     def plot(train_result):
@@ -193,10 +196,11 @@ class ReluHiddenLayerModel(nn.Module):
     def forward(self, x):
         x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
         x = F.relu(x)
+        h = x
         x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
         x = x + self.b
         x = F.relu(x)
-        return x
+        return x, h
 
     @staticmethod
     def plot(train_result):
@@ -220,7 +224,7 @@ class ReluHiddenLayerModelVariation(nn.Module):
         x = einops.einsum(self.W2, x, "outer inner, batch inner -> batch outer")
         x = x + self.b
         x = F.relu(x)
-        return x
+        return x, 0
 
     @staticmethod
     def plots(train_result):
@@ -278,7 +282,7 @@ class MlpModel(nn.Module):
         x = einops.einsum(
             self.W_U, x, "d_model features, batch d_model -> batch features"
         )
-        return x
+        return x, 0
 
     @staticmethod
     def plot(train_result):
@@ -311,4 +315,4 @@ class ResidualModel(nn.Module):
         x = einops.einsum(
             self.W_U, x, "d_model features, batch d_model -> batch features"
         )
-        return x
+        return x, 0

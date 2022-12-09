@@ -7,7 +7,17 @@ cur = con.cursor()
 
 def initialize_db():
     cur.execute(
-        "CREATE TABLE training_run(run_no, name, sparsity, importance, points, steps, task)"
+        """CREATE TABLE training_run (
+               run_no,
+               name,
+               sparsity,
+               importance,
+               points,
+               steps,
+               task,
+               regularization_coeff
+           )
+        """
     )
 
 
@@ -18,7 +28,7 @@ def get_next_num() -> int:
 
 def insert_conf(conf: TrainConfig):
     cur.execute(
-        "INSERT INTO training_run VALUES(?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO training_run VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
         (
             get_next_num(),
             conf.model_name,
@@ -27,6 +37,7 @@ def insert_conf(conf: TrainConfig):
             conf.points,
             conf.steps,
             conf.task,
+            conf.regularization_coeff,
         ),
     )
     con.commit()
@@ -40,8 +51,8 @@ def insert_train_result(train_result):
 
 def get_config(n: int) -> TrainConfig:
     res = cur.execute("SELECT * FROM training_run WHERE run_no = ?", (n,))
-    _, name, s, i, points, steps, task = res.fetchone()
-    return TrainConfig(name, s, i, points, steps, task)
+    _, name, s, i, points, steps, task, regularization_coeff = res.fetchone()
+    return TrainConfig(name, s, i, points, steps, task, regularization_coeff)
 
 
 def get_result(n: int) -> TrainResult:

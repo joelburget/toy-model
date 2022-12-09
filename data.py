@@ -25,6 +25,7 @@ class TrainConfig:
     points: int = 8096
     steps: int = 40_000
     task: Task = "ID"
+    regularization_coeff: float = 0.0  # for L1 regularization
 
 
 @dataclass
