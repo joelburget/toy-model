@@ -38,8 +38,8 @@ def train_model(model, config: TrainConfig):
         x[mask] = 0
 
     # Remove points that are completely zero
-    x_train = x_train[(x_train == 0).sum(axis=1) != 5]
-    x_test = x_test[(x_test == 0).sum(axis=1) != 5]
+    x_train = x_train[(x_train == 0).sum(axis=1) != features]
+    x_test = x_test[(x_test == 0).sum(axis=1) != features]
 
     # Train model
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.98))
