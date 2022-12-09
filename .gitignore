@@ -1,3 +1,8 @@
 env
 __pycache__
+*.ipynb
 .ipynb_checkpoints
+Easy-Transformer
+relu-variation
+residual-model
+train_results
