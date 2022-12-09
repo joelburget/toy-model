@@ -11,7 +11,6 @@ import pandas
 from typing import List
 import plotly.graph_objects as go
 from numpy.typing import NDArray
-from plotly.subplots import make_subplots
 from data import TrainConfig, TrainResult
 
 
