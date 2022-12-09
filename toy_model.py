@@ -8,50 +8,11 @@ import einops
 import matplotlib.pyplot as plt
 import tqdm.auto as tqdm
 import pandas
-from dataclasses import dataclass
-from typing import Callable, List
-import pickle
-import os
+from typing import List
 import plotly.graph_objects as go
 from numpy.typing import NDArray
 from plotly.subplots import make_subplots
-
-# from dash import dcc, html
-
-
-@dataclass
-class TrainConfig:
-    s: float  # sparsity
-    i: float = 0.7  # importance base
-    points: int = 8096
-    steps: int = 40_000
-    task: Callable[[torch.Tensor], torch.Tensor] = lambda x: x
-
-
-@dataclass
-class TrainResult:
-    model: nn.Module
-    config: TrainConfig
-    losses: List[float]
-    train: torch.Tensor
-    test: torch.Tensor
-
-    def save(self, path, mkdir=True):
-        if mkdir:
-            os.mkdir(path)
-        for name, attribute in self.__dict__.items():
-            name = ".".join((name, "pkl"))
-            with open("/".join((path, name)), "wb") as f:
-                pickle.dump(attribute, f)
-
-    @classmethod
-    def load(cls, path):
-        my_model = {}
-        for name in cls.__annotations__:
-            file_name = ".".join((name, "pkl"))
-            with open("/".join((path, file_name)), "rb") as f:
-                my_model[name] = pickle.load(f)
-        return cls(**my_model)
+from data import Task, TrainConfig, TrainResult
 
 
 # mean squared error weighted by feature importance
