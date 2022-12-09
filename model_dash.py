@@ -68,59 +68,40 @@ app.layout = html.Div(
 
 
 def activations_sankey(layers: List[NDArray], inputs: NDArray):
-    print(inputs)
     for x in inputs:
         if x is None:
             return go.Figure(layout_title_text="(invalid input)")
 
     nodes_seen = 0
-    sources, targets, values, colors, labels, node_names = [], [], [], [], [], []
-    xs, ys = [], []
+    sources, targets, values, node_names = [], [], [], []
 
-    node_names += [str(x) for x in inputs]
-
-    xs_space = np.linspace(0.01, 0.99, len(layers) + 1)
-    xs += [xs_space[0]] * len(inputs)
-    ys += list(np.linspace(0.01, 0.99, len(inputs)))
+    node_names += [f"I{i}={x:.3f}" for i, x in enumerate(inputs)]
     prev_layer_acts = inputs
 
     for layer_num, layer in enumerate(layers):
-        print(prev_layer_acts)
         n_rows, n_cols = layer.shape
         activations = layer @ prev_layer_acts
-        node_names += [str(x) for x in activations]
-        xs += [xs_space[layer_num + 1]] * n_rows
-        ys += list(np.linspace(0.01, 0.99, n_rows))
+        layer_name = chr(layer_num + ord("A"))
+        node_names += [f"{layer_name}{i}={x:.3f}" for i, x in enumerate(activations)]
         for i in range(n_cols):
             for j in range(n_rows):
                 sources.append(nodes_seen + i)
                 targets.append(nodes_seen + len(prev_layer_acts) + j)
-                values.append(abs(layer[j, i] * prev_layer_acts[i]))
-                labels.append(f"{layer[j, i]:.2f}")
-                colors.append(
-                    "rgba(255,0,0, 0.3)" if layer[j, i] > 0 else "rgba(0,0,255, 0.3)"
-                )
+                values.append(layer[j, i] * prev_layer_acts[i])
         nodes_seen += len(prev_layer_acts)
         prev_layer_acts = activations
 
-    return go.Figure(
-        layout_title_text="Activations for Given Inputs",
-        data=[
-            go.Sankey(
-                node=dict(
-                    label=node_names,
-                    x=xs,
-                    y=ys,
-                ),
-                link=dict(
-                    source=sources,
-                    target=targets,
-                    value=values,
-                    label=labels,
-                    color=colors,
-                ),
-            )
-        ],
+    # XXX transpose?
+    layer_shapes = [layers[0].shape[1], layers[0].shape[0]]
+    layer_shapes += [layer.shape[0] for layer in layers[1:]]
+
+    return sankey(
+        "Activations for Given Inputs",
+        sources,
+        targets,
+        values,
+        node_names,
+        layer_shapes,
     )
 
 

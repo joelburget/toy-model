@@ -119,44 +119,30 @@ def stack_plot(w):
     return stack_plot_df(mk_dataframe(w))
 
 
-def weights_sankey(layers: List[NDArray]):
-    # layers: e.g. [m, n], [n, o]
-    # e.g. [neurons, features], [features, neurons]
+def sankey(title: str, sources, targets, values, node_names, layer_shapes):
+    colors, labels, xs, ys = [], [], [], []
 
-    nodes_seen = 0
-    sources, targets, values, colors, labels, node_names = [], [], [], [], [], []
-    xs, ys = [], []
+    n_inputs = layer_shapes[0]
+    xs_space = np.linspace(0.01, 0.99, len(layer_shapes))
 
-    n_inputs = layers[0].shape[1]
-    node_names += ["In" + str(n) for n in range(n_inputs)]
+    for i in range(len(values)):
+        colors.append("rgba(255,0,0, 0.3)" if values[i] > 0 else "rgba(0,0,255, 0.3)")
+        labels.append(f"{values[i]:.3f}")
+        values[i] = abs(values[i])
 
-    xs_space = np.linspace(0.01, 0.99, len(layers) + 1)
-    xs += [xs_space[0]] * n_inputs
-    ys += list(np.linspace(0.01, 0.99, n_inputs))
-    prev_layer_nodes = n_inputs
+        # sankey won't show the node if all of its outputs are 0 :facepalm:
+        if values[i] == 0.0:
+            values[i] += 1e-4
 
-    for layer_num, layer in enumerate(layers):
-        layer_name = chr(layer_num + ord("A"))
-        n_rows, n_cols = layer.shape
-        node_names += [layer_name + str(j) for j in range(n_rows)]
-        xs += [xs_space[layer_num + 1]] * n_rows
+    for layer_num, n_rows in enumerate(layer_shapes):
+        xs += [xs_space[layer_num]] * n_rows
         ys += list(np.linspace(0.01, 0.99, n_rows))
-        for i in range(n_cols):
-            for j in range(n_rows):
-                sources.append(nodes_seen + i)
-                targets.append(nodes_seen + prev_layer_nodes + j)
-                values.append(abs(layer[j, i]))
-                labels.append(f"{layer[j, i]:.2f}")
-                colors.append(
-                    "rgba(255,0,0, 0.3)" if layer[j, i] > 0 else "rgba(0,0,255, 0.3)"
-                )
-        nodes_seen += prev_layer_nodes
-        prev_layer_nodes = n_rows
 
     return go.Figure(
-        layout_title_text="Weights",
+        layout_title_text=title,
         data=[
             go.Sankey(
+                arrangement="fixed",
                 node=dict(
                     label=node_names,
                     x=xs,
@@ -172,6 +158,36 @@ def weights_sankey(layers: List[NDArray]):
             )
         ],
     )
+
+
+def weights_sankey(layers: List[NDArray]):
+    # layers: e.g. [m, n], [n, o]
+    # e.g. [neurons, features], [features, neurons]
+
+    nodes_seen = 0
+    sources, targets, values, node_names = [], [], [], []
+
+    n_inputs = layers[0].shape[1]
+    node_names += ["In" + str(n) for n in range(n_inputs)]
+    prev_layer_nodes = n_inputs
+
+    for layer_num, layer in enumerate(layers):
+        layer_name = chr(layer_num + ord("A"))
+        n_rows, n_cols = layer.shape
+        node_names += [layer_name + str(j) for j in range(n_rows)]
+        for i in range(n_cols):
+            for j in range(n_rows):
+                sources.append(nodes_seen + i)
+                targets.append(nodes_seen + prev_layer_nodes + j)
+                values.append(layer[j, i])
+        nodes_seen += prev_layer_nodes
+        prev_layer_nodes = n_rows
+
+    # XXX transpose?
+    layer_shapes = [layers[0].shape[1], layers[0].shape[0]]
+    layer_shapes += [layer.shape[0] for layer in layers[1:]]
+
+    return sankey("Weights", sources, targets, values, node_names, layer_shapes)
 
 
 class ToyModel(nn.Module):
