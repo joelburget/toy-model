@@ -95,9 +95,6 @@ def stack_plot(w):
 def sankey(title: str, sources, targets, values, node_names, layer_shapes):
     colors, labels, xs, ys = [], [], [], []
 
-    n_inputs = layer_shapes[0]
-    xs_space = np.linspace(0.01, 0.99, len(layer_shapes))
-
     for i in range(len(values)):
         colors.append("rgba(255,0,0, 0.3)" if values[i] > 0 else "rgba(0,0,255, 0.3)")
         labels.append(f"{values[i]:.3f}")
@@ -107,6 +104,7 @@ def sankey(title: str, sources, targets, values, node_names, layer_shapes):
         if values[i] == 0.0:
             values[i] += 1e-4
 
+    xs_space = np.linspace(0.01, 0.99, len(layer_shapes))
     for layer_num, n_rows in enumerate(layer_shapes):
         xs += [xs_space[layer_num]] * n_rows
         ys += list(np.linspace(0.01, 0.99, n_rows))
