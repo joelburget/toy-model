@@ -333,7 +333,7 @@ class MLP(nn.Module):
         return x
 
 
-class ResidualModel(nn.Module):
+class MlpModel(nn.Module):
     def __init__(self, features=20, d_model=5, d_mlp=20):
         super().__init__()
         self.features = features
