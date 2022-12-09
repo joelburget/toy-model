@@ -12,7 +12,7 @@ from typing import List
 import plotly.graph_objects as go
 from numpy.typing import NDArray
 from plotly.subplots import make_subplots
-from data import Task, TrainConfig, TrainResult
+from data import TrainConfig, TrainResult
 
 
 # mean squared error weighted by feature importance
@@ -21,7 +21,6 @@ def loss_fn(I, y_pred, y_true):
     error = y_true - y_pred
     # importance falls off geometrically
     importance = torch.tensor([I**i for i in range(features)])
-    # TODO: use torch.MSELoss or torch.mse_error?
     return torch.mean(error**2 * importance)
 
 
@@ -293,3 +292,24 @@ class MlpModel(nn.Module):
         stack_plot(w_u).show()
         # px.bar(model.b.detach().numpy(), title="bias").show()
         # return plt.semilogy(train_result.losses)
+
+
+class ResidualModel(nn.Module):
+    def __init__(self, features=20, d_model=5, d_mlp=20):
+        super().__init__()
+        self.features = features
+        self.d_model = d_model
+        self.d_mlp = d_mlp
+        self.W_E = nn.Parameter(torch.randn(features, d_model))
+        self.mlp = MLP(d_model, d_mlp)
+        self.W_U = nn.Parameter(torch.randn(d_model, features))
+
+    def forward(self, x):
+        x = einops.einsum(
+            self.W_E, x, "features d_model, batch features -> batch d_model"
+        )
+        x = x + self.mlp(x)
+        x = einops.einsum(
+            self.W_U, x, "d_model features, batch d_model -> batch features"
+        )
+        return x
