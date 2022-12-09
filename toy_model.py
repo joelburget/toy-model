@@ -67,7 +67,7 @@ def train_model(model, config: TrainConfig):
         optimizer.step()
         optimizer.zero_grad()
 
-    return TrainResult(config, losses, x_train, x_test)
+    return TrainResult(model, config, losses, x_train, x_test)
 
 
 def stack_plot_df(w):
