@@ -21,7 +21,6 @@ from plotly.subplots import make_subplots
 
 @dataclass
 class TrainConfig:
-    model: nn.Module
     s: float  # sparsity
     i: float = 0.7  # importance base
     points: int = 8096
@@ -31,6 +30,7 @@ class TrainConfig:
 
 @dataclass
 class TrainResult:
+    model: nn.Module
     config: TrainConfig
     losses: List[float]
     train: torch.Tensor
@@ -64,8 +64,7 @@ def loss_fn(I, y_pred, y_true):
     return torch.mean(error**2 * importance)
 
 
-def train_model(config: TrainConfig):
-    model = config.model
+def train_model(model, config: TrainConfig):
     features: int = model.features
     # Start with random data
     x_train = torch.rand(config.points, features)
@@ -207,7 +206,7 @@ class ToyModel(nn.Module):
 
     @staticmethod
     def plot(train_result):
-        w = train_result.config.model.W.detach().numpy()
+        w = train_result.model.W.detach().numpy()
         px.imshow((w.T @ w)).show()
         px.imshow(w).show()
         return plt.semilogy(train_result.losses)
@@ -231,7 +230,7 @@ class ReluHiddenLayerModel(nn.Module):
 
     @staticmethod
     def plot(train_result):
-        w = train_result.config.model.W.detach().numpy()
+        w = train_result.model.W.detach().numpy()
         px.imshow(w.T).show()
         return plt.semilogy(train_result.losses)
 
@@ -255,7 +254,7 @@ class ReluHiddenLayerModelVariation(nn.Module):
 
     @staticmethod
     def plot(train_result):
-        model = train_result.config.model
+        model = train_result.model
         w1 = model.W1.detach().numpy()
         w2 = model.W2.detach().numpy()
         px.imshow(w1.T, title="W1").show()
@@ -268,7 +267,7 @@ class ReluHiddenLayerModelVariation(nn.Module):
     # attempt to plot all in one figure
     @staticmethod
     def plot_(train_result):
-        model = train_result.config.model
+        model = train_result.model
         w1 = model.W1.detach().numpy()
         w2 = model.W2.detach().numpy()
 
@@ -298,7 +297,7 @@ class ReluHiddenLayerModelVariation(nn.Module):
 
     @staticmethod
     def plots(train_result):
-        model = train_result.config.model
+        model = train_result.model
         w1 = model.W1.detach().numpy()
         w2 = model.W2.detach().numpy()
 
@@ -356,7 +355,7 @@ class ResidualModel(nn.Module):
 
     @staticmethod
     def plot(train_result):
-        model = train_result.config.model
+        model = train_result.model
         w_e = model.W_E.detach().numpy()
         w_u = model.W_U.detach().numpy()
         px.imshow(w_e, title="W_E").show()

@@ -121,7 +121,7 @@ def activations_sankey(layers: List[NDArray], inputs: NDArray):
 )
 def fill_values(run_num, input_0, input_1, input_2):
     train_result = TrainResult.load(f"relu-variation/relu-variation-{run_num}")
-    model = train_result.config.model
+    model = train_result.model
     figs = ReluHiddenLayerModelVariation.plots(train_result)
     return (
         weights_sankey([model.W1.detach().numpy(), model.W2.detach().numpy()]),
