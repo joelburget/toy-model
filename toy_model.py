@@ -7,10 +7,23 @@ import torch
 import einops
 import tqdm.auto as tqdm
 import pandas
-from typing import List
+from typing import Callable, List
 import plotly.graph_objects as go
 from numpy.typing import NDArray
-from data import TrainConfig, TrainResult
+from data import TrainConfig, TrainResult, ActFn
+
+
+def solu(x: torch.Tensor) -> torch.Tensor:
+    return x * F.softmax(x)
+
+
+def act_fn(name: ActFn) -> Callable[[torch.Tensor], torch.Tensor]:
+    if name == "ReLU":
+        return F.relu
+    elif name == "GeLU":
+        return F.gelu
+    else:
+        return solu
 
 
 # mean squared error weighted by feature importance
@@ -162,18 +175,19 @@ def weights_sankey(layers: List[NDArray]):
 
 
 class ToyModel(nn.Module):
-    def __init__(self, neurons=5, features=20):
+    def __init__(self, neurons=5, features=20, act_fn="ReLU"):
         super().__init__()
         self.neurons = neurons
         self.features = features
         self.W = nn.Parameter(torch.randn(neurons, features))
         self.b = nn.Parameter(torch.randn(features))
+        self.act_fn = act_fn
 
     def forward(self, x):
         x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
         x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
         x = x + self.b
-        x = F.relu(x)
+        x = act_fn(self.act_fn)(x)
         return x, 0
 
     @staticmethod
@@ -184,21 +198,22 @@ class ToyModel(nn.Module):
 
 
 class ReluHiddenLayerModel(nn.Module):
-    def __init__(self, neurons, features):
+    def __init__(self, neurons, features, act_fn="ReLU"):
         super().__init__()
         self.neurons = neurons
         self.features = features
         self.W = nn.Parameter(torch.randn(neurons, features))
         self.b = nn.Parameter(torch.randn(features))
+        self.act_fn = act_fn
 
     def forward(self, x):
-        x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
-        x = F.relu(x)
-        h = x
-        x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
-        x = x + self.b
-        x = F.relu(x)
-        return x, h
+        f = act_fn(self.act_fn)
+        h = f(einops.einsum(self.W, x, "inner outer, batch outer -> batch inner"))
+        x_ = f(
+            einops.einsum(self.W.T, h, "outer inner, batch inner -> batch outer")
+            + self.b
+        )
+        return x_, h
 
     @staticmethod
     def plot(train_result):
@@ -207,20 +222,22 @@ class ReluHiddenLayerModel(nn.Module):
 
 
 class ReluHiddenLayerModelVariation(nn.Module):
-    def __init__(self, neurons=6, features=3):
+    def __init__(self, neurons=6, features=3, act_fn="ReLU"):
         super().__init__()
         self.neurons = neurons
         self.features = features
         self.W1 = nn.Parameter(torch.randn(neurons, features))
         self.W2 = nn.Parameter(torch.randn(features, neurons))
         self.b = nn.Parameter(torch.randn(features))
+        self.act_fn = act_fn
 
     def forward(self, x):
+        f = act_fn(self.act_fn)
         x = einops.einsum(self.W1, x, "inner outer, batch outer -> batch inner")
-        x = F.relu(x)
+        x = f(x)
         x = einops.einsum(self.W2, x, "outer inner, batch inner -> batch outer")
         x = x + self.b
-        x = F.relu(x)
+        x = f(x)
         return x, 0
 
     @staticmethod
@@ -243,7 +260,7 @@ class MultipleHiddenLayerModel(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, d_model=5, d_mlp=20):
+    def __init__(self, d_model=5, d_mlp=20, act_fn="ReLU"):
         super().__init__()
         self.d_model = d_model
         self.d_mlp = d_mlp
@@ -251,25 +268,27 @@ class MLP(nn.Module):
         self.b_in = nn.Parameter(torch.randn(d_mlp))
         self.W_out = nn.Parameter(torch.randn(d_mlp, d_model))
         self.b_out = nn.Parameter(torch.randn(d_model))
+        self.act_fn = act_fn
 
     def forward(self, x):
         x = einops.einsum(self.W_in, x, "d_model d_mlp, batch d_model -> batch d_mlp")
         x = x + self.b_in
-        x = F.relu(x)
+        x = act_fn(self.act_fn)(x)
         x = einops.einsum(self.W_out, x, "d_mlp d_model, batch d_mlp -> batch d_model")
         x = x + self.b_out
         return x
 
 
 class MlpModel(nn.Module):
-    def __init__(self, features=20, d_model=5, d_mlp=20):
+    def __init__(self, features=20, d_model=5, d_mlp=20, act_fn):
         super().__init__()
         self.features = features
         self.d_model = d_model
         self.d_mlp = d_mlp
         self.W_E = nn.Parameter(torch.randn(features, d_model))
-        self.mlp = MLP(d_model, d_mlp)
+        self.mlp = MLP(d_model, d_mlp, act_fn)
         self.W_U = nn.Parameter(torch.randn(d_model, features))
+        self.act_fn = act_fn
 
     def forward(self, x):
         x = einops.einsum(
@@ -293,14 +312,15 @@ class MlpModel(nn.Module):
 
 
 class ResidualModel(nn.Module):
-    def __init__(self, features=20, d_model=5, d_mlp=20):
+    def __init__(self, features=20, d_model=5, d_mlp=20, act_fn="ReLU"):
         super().__init__()
         self.features = features
         self.d_model = d_model
         self.d_mlp = d_mlp
         self.W_E = nn.Parameter(torch.randn(features, d_model))
-        self.mlp = MLP(d_model, d_mlp)
+        self.mlp = MLP(d_model, d_mlp, act_fn)
         self.W_U = nn.Parameter(torch.randn(d_model, features))
+        self.act_fn = act_fn
 
     def forward(self, x):
         x = einops.einsum(

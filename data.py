@@ -15,6 +15,7 @@ ModelName = Literal[
     "MlpModel",
 ]
 sparsities = [0, 0.7, 0.9, 0.97, 0.99, 0.997, 0.999]
+ActFn = Literal["ReLU", "GeLU", "SoLU"]
 
 
 @dataclass
@@ -26,6 +27,7 @@ class TrainConfig:
     steps: int = 40_000
     task: Task = "ID"
     regularization_coeff: float = 0.0  # for L1 regularization
+    act_fn: ActFn = "ReLU"
 
 
 @dataclass

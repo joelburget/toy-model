@@ -15,7 +15,8 @@ def initialize_db():
                points,
                steps,
                task,
-               regularization_coeff
+               regularization_coeff,
+               act_fn
            )
         """
     )
@@ -28,7 +29,7 @@ def get_next_num() -> int:
 
 def insert_conf(conf: TrainConfig):
     cur.execute(
-        "INSERT INTO training_run VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO training_run VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             get_next_num(),
             conf.model_name,
@@ -38,6 +39,7 @@ def insert_conf(conf: TrainConfig):
             conf.steps,
             conf.task,
             conf.regularization_coeff,
+            conf.act_fn,
         ),
     )
     con.commit()
@@ -51,8 +53,8 @@ def insert_train_result(train_result):
 
 def get_config(n: int) -> TrainConfig:
     res = cur.execute("SELECT * FROM training_run WHERE run_no = ?", (n,))
-    _, name, s, i, points, steps, task, regularization_coeff = res.fetchone()
-    return TrainConfig(name, s, i, points, steps, task, regularization_coeff)
+    _, name, s, i, points, steps, task, regularization_coeff, act_fn = res.fetchone()
+    return TrainConfig(name, s, i, points, steps, task, regularization_coeff, act_fn)
 
 
 def get_result(n: int) -> TrainResult:
