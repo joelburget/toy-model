@@ -10,7 +10,9 @@ Task = Literal["ID", "SQUARE", "ABS"]
 ModelName = Literal[
     "ToyModel",
     "ReluHiddenLayerModel",
+    "HiddenLayerModel",
     "ReluHiddenLayerModelVariation",
+    "HiddenLayerModelVariation",
     # "MultipleHiddenLayerModel",
     "MlpModel",
     "ResidualModel",

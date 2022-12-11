@@ -31,10 +31,13 @@ def create_model(config: TrainConfig) -> nn.Module:
         model_class = ToyModel
     if config.model_name == "LayerNormToyModel":
         model_class = LayerNormToyModel
-    elif config.model_name == "ReluHiddenLayerModel":
-        model_class = ReluHiddenLayerModel
-    elif config.model_name == "ReluHiddenLayerModelVariation":
-        model_class = ReluHiddenLayerModelVariation
+    elif config.model_name in ("ReluHiddenLayerModel", "HiddenLayerModel"):
+        model_class = HiddenLayerModel
+    elif config.model_name in (
+        "ReluHiddenLayerModelVariation",
+        "HiddenLayerModelVariation",
+    ):
+        model_class = HiddenLayerModelVariation
     # if config.model_name == "MultipleHiddenLayerModel":
     #     model_class = MultipleHiddenLayerModel
     elif config.model_name == "MlpModel":
@@ -260,7 +263,7 @@ class LayerNormToyModel(nn.Module):
         px.bar(ln.b.detach().numpy(), title="LN B").show()
 
 
-class ReluHiddenLayerModel(nn.Module):
+class HiddenLayerModel(nn.Module):
     def __init__(self, neurons, features, act_fn="ReLU"):
         super().__init__()
         self.neurons = neurons
@@ -284,7 +287,7 @@ class ReluHiddenLayerModel(nn.Module):
         px.imshow(w.T).show()
 
 
-class ReluHiddenLayerModelVariation(nn.Module):
+class HiddenLayerModelVariation(nn.Module):
     def __init__(self, neurons=6, features=3, act_fn="ReLU"):
         super().__init__()
         self.neurons = neurons
