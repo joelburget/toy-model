@@ -53,6 +53,7 @@ def loss_fn(I, y_pred, y_true):
 
 
 def train_model(config: TrainConfig):
+    model = create_model(config)
     features: int = model.features
 
     lower_bound, upper_bound = -10, 10
