@@ -26,6 +26,23 @@ def act_fn(name: ActFn) -> Callable[[torch.Tensor], torch.Tensor]:
         return solu
 
 
+def create_model(config: TrainConfig) -> nn.Module:
+    if config.model_name == "ToyModel":
+        model_class = ToyModel
+    if config.model_name == "ReluHiddenLayerModel":
+        model_class = ReluHiddenLayerModel
+    if config.model_name == "ReluHiddenLayerModelVariation":
+        model_class = ReluHiddenLayerModelVariation
+    # if config.model_name == "MultipleHiddenLayerModel":
+    #     model_class = MultipleHiddenLayerModel
+    if config.model_name == "MlpModel":
+        model_class = MlpModel
+    else:
+        model_class = ResidualModel
+
+    return model_class(act_fn=config.act_fn, **config.args)
+
+
 # mean squared error weighted by feature importance
 def loss_fn(I, y_pred, y_true):
     _, features = y_pred.shape
@@ -35,7 +52,7 @@ def loss_fn(I, y_pred, y_true):
     return torch.mean(error**2 * importance)
 
 
-def train_model(model, config: TrainConfig):
+def train_model(config: TrainConfig):
     features: int = model.features
 
     lower_bound, upper_bound = -10, 10
