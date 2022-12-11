@@ -14,7 +14,7 @@ from data import TrainConfig, TrainResult, ActFn
 
 
 def solu(x: torch.Tensor) -> torch.Tensor:
-    return x * F.softmax(x)
+    return x * F.softmax(x, dim=1)
 
 
 def act_fn(name: ActFn) -> Callable[[torch.Tensor], torch.Tensor]:
