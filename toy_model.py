@@ -259,6 +259,7 @@ class LayerNormToyModel(nn.Module):
         ln = model.ln
         w = model.W.detach().numpy()
         px.imshow((w.T @ w), title="w.T @ w").show()
+        px.imshow(w).show()
         px.bar(ln.w.detach().numpy(), title="LN W").show()
         px.bar(ln.b.detach().numpy(), title="LN B").show()
 
