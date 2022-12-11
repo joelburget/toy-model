@@ -11,8 +11,9 @@ ModelName = Literal[
     "ToyModel",
     "ReluHiddenLayerModel",
     "ReluHiddenLayerModelVariation",
-    "MultipleHiddenLayerModel",
+    # "MultipleHiddenLayerModel",
     "MlpModel",
+    "ResidualModel",
 ]
 sparsities = [0, 0.7, 0.9, 0.97, 0.99, 0.997, 0.999]
 ActFn = Literal["ReLU", "GeLU", "SoLU"]
