@@ -297,7 +297,7 @@ class MLP(nn.Module):
 
 
 class MlpModel(nn.Module):
-    def __init__(self, features=20, d_model=5, d_mlp=20, act_fn):
+    def __init__(self, act_fn, features=20, d_model=5, d_mlp=20):
         super().__init__()
         self.features = features
         self.d_model = d_model
