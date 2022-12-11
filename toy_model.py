@@ -272,10 +272,6 @@ class ReluHiddenLayerModelVariation(nn.Module):
         )
 
 
-class MultipleHiddenLayerModel(nn.Module):
-    pass  # TODO
-
-
 class MLP(nn.Module):
     def __init__(self, d_model=5, d_mlp=20, act_fn="ReLU"):
         super().__init__()
