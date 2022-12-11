@@ -29,6 +29,8 @@ def act_fn(name: ActFn) -> Callable[[torch.Tensor], torch.Tensor]:
 def create_model(config: TrainConfig) -> nn.Module:
     if config.model_name == "ToyModel":
         model_class = ToyModel
+    if config.model_name == "LayerNormToyModel":
+        model_class = LayerNormToyModel
     elif config.model_name == "ReluHiddenLayerModel":
         model_class = ReluHiddenLayerModel
     elif config.model_name == "ReluHiddenLayerModelVariation":
@@ -213,6 +215,49 @@ class ToyModel(nn.Module):
         w = train_result.model.W.detach().numpy()
         px.imshow((w.T @ w)).show()
         px.imshow(w).show()
+
+
+class LayerNorm(nn.Module):
+    def __init__(self, length, eps=1e-5):
+        super().__init__()
+        self.length = length
+        self.eps = eps
+        self.w = nn.Parameter(torch.ones(self.length))
+        self.b = nn.Parameter(torch.zeros(self.length))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x - x.mean(-1, keepdim=True)  # [batch, length]
+        scale = (x.pow(2).mean(-1, keepdim=True) + self.eps).sqrt()
+        x = x / scale  # [batch, length]
+        return x * self.w + self.b
+
+
+class LayerNormToyModel(nn.Module):
+    def __init__(self, neurons=5, features=20, act_fn="SoLU"):
+        super().__init__()
+        self.neurons = neurons
+        self.features = features
+        self.W = nn.Parameter(torch.randn(neurons, features))
+        self.b = nn.Parameter(torch.randn(features))
+        self.act_fn = act_fn
+        self.ln = LayerNorm(features)
+
+    def forward(self, x):
+        x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
+        x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
+        x = x + self.b
+        x = act_fn(self.act_fn)(x)
+        x = self.ln(x)
+        return x, 0
+
+    @staticmethod
+    def plot(train_result):
+        model = train_result.model
+        ln = model.ln
+        w = model.W.detach().numpy()
+        px.imshow((w.T @ w), title="w.T @ w").show()
+        px.bar(ln.w.detach().numpy(), title="LN W").show()
+        px.bar(ln.b.detach().numpy(), title="LN B").show()
 
 
 class ReluHiddenLayerModel(nn.Module):
