@@ -29,13 +29,13 @@ def act_fn(name: ActFn) -> Callable[[torch.Tensor], torch.Tensor]:
 def create_model(config: TrainConfig) -> nn.Module:
     if config.model_name == "ToyModel":
         model_class = ToyModel
-    if config.model_name == "ReluHiddenLayerModel":
+    elif config.model_name == "ReluHiddenLayerModel":
         model_class = ReluHiddenLayerModel
-    if config.model_name == "ReluHiddenLayerModelVariation":
+    elif config.model_name == "ReluHiddenLayerModelVariation":
         model_class = ReluHiddenLayerModelVariation
     # if config.model_name == "MultipleHiddenLayerModel":
     #     model_class = MultipleHiddenLayerModel
-    if config.model_name == "MlpModel":
+    elif config.model_name == "MlpModel":
         model_class = MlpModel
     else:
         model_class = ResidualModel
