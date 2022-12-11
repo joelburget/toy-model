@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, List
 import pickle
 import os
@@ -28,6 +28,7 @@ class TrainConfig:
     task: Task = "ID"
     regularization_coeff: float = 0.0  # for L1 regularization
     act_fn: ActFn = "ReLU"
+    args: dict = field(default_factory=dict)
 
 
 @dataclass

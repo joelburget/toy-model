@@ -1,4 +1,7 @@
 import sqlite3
+import datetime
+import json
+
 from data import TrainConfig, TrainResult
 
 con = sqlite3.connect("training.db")
@@ -8,15 +11,17 @@ cur = con.cursor()
 def initialize_db():
     cur.execute(
         """CREATE TABLE training_run (
-               run_no,
-               name,
-               sparsity,
-               importance,
-               points,
-               steps,
-               task,
-               regularization_coeff,
-               act_fn
+               run_no               INTEGER,
+               name                 TEXT,
+               sparsity             REAL,
+               importance           REAL,
+               points               INTEGER,
+               steps                INTEGER,
+               task                 STRING,
+               regularization_coeff REAL,
+               act_fn               TEXT,
+               args                 TEXT,
+               created              TIMESTAMP
            )
         """
     )
@@ -29,17 +34,32 @@ def get_next_num() -> int:
 
 def insert_conf(conf: TrainConfig):
     cur.execute(
-        "INSERT INTO training_run VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            get_next_num(),
-            conf.model_name,
-            conf.s,
-            conf.i,
-            conf.points,
-            conf.steps,
-            conf.task,
-            conf.regularization_coeff,
-            conf.act_fn,
+        """INSERT INTO training_run VALUES (
+               :run_no,
+               :name,
+               :sparsity,
+               :importance,
+               :points,
+               :steps,
+               :task,
+               :regularization_coeff,
+               :act_fn,
+               :args,
+               :created
+            )
+        """,
+        dict(
+            run_no=get_next_num(),
+            name=conf.model_name,
+            sparsity=conf.s,
+            importance=conf.i,
+            points=conf.points,
+            steps=conf.steps,
+            task=conf.task,
+            regularization_coeff=conf.regularization_coeff,
+            act_fn=conf.act_fn,
+            args=json.dumps(conf.args),
+            created=datetime.datetime.now(),
         ),
     )
     con.commit()
@@ -53,8 +73,22 @@ def insert_train_result(train_result):
 
 def get_config(n: int) -> TrainConfig:
     res = cur.execute("SELECT * FROM training_run WHERE run_no = ?", (n,))
-    _, name, s, i, points, steps, task, regularization_coeff, act_fn = res.fetchone()
-    return TrainConfig(name, s, i, points, steps, task, regularization_coeff, act_fn)
+    (
+        _,
+        name,
+        s,
+        i,
+        points,
+        steps,
+        task,
+        regularization_coeff,
+        act_fn,
+        args,
+        _,
+    ) = res.fetchone()
+    return TrainConfig(
+        name, s, i, points, steps, task, regularization_coeff, act_fn, json.loads(args)
+    )
 
 
 def get_result(n: int) -> TrainResult:
