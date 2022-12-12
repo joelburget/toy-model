@@ -1,16 +1,18 @@
-import plotly.express as px
-import torch
+from functools import partial
+from typing import Callable, List
+
+import einops
 import numpy as np
+import pandas
+import plotly.express as px
+import plotly.graph_objects as go
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
-import einops
 import tqdm.auto as tqdm
-import pandas
-from typing import Callable, List
-import plotly.graph_objects as go
 from numpy.typing import NDArray
-from data import TrainConfig, TrainResult, ActFn
+
+from data import ActFn, TrainConfig, TrainResult
 
 
 def solu(x: torch.Tensor) -> torch.Tensor:
@@ -61,6 +63,14 @@ def train_model(config: TrainConfig, device="cpu"):
     return retrain_model(create_model(config), config, device)
 
 
+def pairwise(f, t):
+    size = len(t)
+    result = torch.empty(size // 2)
+    for i in range(size // 2):
+        result[i] = (t[2 * i], t[2 * i + 1])
+    return result
+
+
 def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
     features: int = model.features
     lower_bound, upper_bound = -10, 10
@@ -86,13 +96,17 @@ def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
     x_test = x_test[(x_test == 0).sum(axis=1) != features].to(device)
 
     # Train model
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.98))
+    optimizer = torch.optim.AdamW(model.parameters())
 
     task = lambda x: x
     if config.task == "SQUARE":
         task = lambda x: x**2
     elif config.task == "ABS":
         task = lambda x: abs(x)
+    elif config.task == "MAX":
+        task = partial(pairwise, max)
+    elif config.task == "MIN":
+        task = partial(pairwise, min)
 
     losses = []
     for t in tqdm.tqdm(range(config.steps)):

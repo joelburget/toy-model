@@ -1,12 +1,12 @@
+import os
+import pickle
+from dataclasses import dataclass, field
+from typing import List, Literal
+
 import torch
 import torch.nn as nn
-from dataclasses import dataclass, field
-from typing import Literal, List
-import pickle
-import os
 
-
-Task = Literal["ID", "SQUARE", "ABS"]
+Task = Literal["ID", "SQUARE", "ABS", "MAX", "MIN"]
 ModelName = Literal[
     "ToyModel",
     "ReluHiddenLayerModel",
