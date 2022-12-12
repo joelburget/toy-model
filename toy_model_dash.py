@@ -145,12 +145,12 @@ def update_values(act_fn, run_num, sparsity, model_name):
     train_result = get_result(int(train_result_no))
     # print(f"train_result: {train_result}")
     model = train_result.model
-    w = model.W.detach().numpy()
+    w = model.W.cpu().detach().numpy()
     return (
         # weights_sankey([model.W1.detach().numpy(), model.W2.detach().numpy()]),
         px.imshow((w.T @ w)),
         px.imshow(w),
-        px.bar(model.b.detach().numpy()),
+        px.bar(model.b.cpu().detach().numpy()),
         px.scatter(train_result.losses, log_y=True),
     )
 
