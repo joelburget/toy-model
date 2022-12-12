@@ -58,11 +58,14 @@ def loss_fn(importance, y_pred, y_true, device="cpu"):
 
 
 def train_model(config: TrainConfig, device="cpu"):
-    model = create_model(config)
-    model.to(device)
-    features: int = model.features
+    return retrain_model(create_model(config), config, device)
 
+
+def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
+    features: int = model.features
     lower_bound, upper_bound = -10, 10
+
+    model.to(device)
 
     # Start with random data
     x_train = torch.FloatTensor(config.points, features).uniform_(
