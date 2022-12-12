@@ -44,7 +44,10 @@ class TrainResult:
 
     def save(self, path, mkdir=True):
         if mkdir:
-            os.mkdir(path)
+            try:
+                os.mkdir(path)
+            except FileExistsError:
+                pass
         for name, attribute in self.__dict__.items():
             name = ".".join((name, "pkl"))
             with open("/".join((path, name)), "wb") as f:
