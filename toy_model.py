@@ -257,6 +257,14 @@ class ToyModel(nn.Module):
         px.imshow((w.T @ w)).show()
         px.imshow(w).show()
 
+    def plots(self):
+        w = self.W.cpu().detach().numpy()
+        return dict(
+            w_square=px.imshow((w.T @ w), title="w.T @ w"),
+            w=px.imshow(w, title="w"),
+            b=px.bar(self.b.cpu().detach().numpy(), title="b"),
+        )
+
 
 class LayerNorm(nn.Module):
     def __init__(self, length, eps=1e-5):
@@ -300,6 +308,16 @@ class LayerNormToyModel(nn.Module):
         px.imshow(w).show()
         px.bar(ln.w.detach().numpy(), title="LN W").show()
         px.bar(ln.b.detach().numpy(), title="LN B").show()
+
+    def plots(self):
+        w = self.W.detach().numpy()
+        return dict(
+            w_square=px.imshow((w.T @ w), title="w.T @ w"),
+            w=px.imshow(w, title="w"),
+            b=px.bar(self.b.detach().numpy(), title="b"),
+            ln_w=px.bar(self.ln.w.detach().numpy(), title="LN W"),
+            ln_b=px.bar(self.ln.b.detach().numpy(), title="LN B"),
+        )
 
 
 class HiddenLayerModel(nn.Module):

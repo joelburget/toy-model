@@ -5,6 +5,7 @@ import training
 from data import sparsities
 import sqlite3
 from training_db import get_result
+import torch
 
 app = Dash(__name__)
 
@@ -46,14 +47,6 @@ app.layout = html.Div(
                 ),
             ]
         ),
-        # html.Div(
-        #     [
-        #         html.H2("Weights"),
-        #         fig_sankey := dcc.Graph(
-        #             figure=go.Figure(),
-        #         ),
-        #     ]
-        # ),
         html.H2("Loss"),
         html.Div(
             [
@@ -64,8 +57,15 @@ app.layout = html.Div(
         html.H2("Weights"),
         html.Div(
             [
+                fig_w_square := dcc.Graph(figure=go.Figure()),
                 fig_w := dcc.Graph(figure=go.Figure()),
-                fig_w_stack := dcc.Graph(figure=go.Figure()),
+            ],
+            style={"display": "flex", "flex-direction": "row"},
+        ),
+        html.Div(
+            [
+                fig_ln_w := dcc.Graph(figure=go.Figure()),
+                fig_ln_b := dcc.Graph(figure=go.Figure()),
             ],
             style={"display": "flex", "flex-direction": "row"},
         ),
@@ -119,9 +119,11 @@ app.layout = html.Div(
 
 @app.callback(
     # Output(fig_sankey, "figure"),
+    Output(fig_w_square, "figure"),
     Output(fig_w, "figure"),
-    Output(fig_w_stack, "figure"),
     Output(fig_b, "figure"),
+    Output(fig_ln_w, "figure"),
+    Output(fig_ln_b, "figure"),
     Output(fig_loss, "figure"),
     Output(run_losses, "children"),
     Input(act_fn_selector, "value"),
@@ -153,13 +155,23 @@ def update_values(act_fn, run_num, sparsity, model_name):
 
     train_result_no = run_nos[int(run_num)]
     train_result = get_result(int(train_result_no))
-    model = train_result.model
-    w = model.W.cpu().detach().numpy()
+    with torch.no_grad():
+        train_result.model.cpu()
+        plots = train_result.model.plots()
+
+    fig_ln_w = go.Figure()
+    fig_ln_b = go.Figure()
+    if "ln_w" in plots:
+        fig_ln_w = plots["ln_w"]
+        fig_ln_b = plots["ln_b"]
+
     return (
         # weights_sankey([model.W1.detach().numpy(), model.W2.detach().numpy()]),
-        px.imshow((w.T @ w)),
-        px.imshow(w),
-        px.bar(model.b.cpu().detach().numpy()),
+        plots["w_square"],
+        plots["w"],
+        plots["b"],
+        fig_ln_w,
+        fig_ln_b,
         px.scatter(train_result.losses, log_y=True),
         f"losses: {formatted_losses} (average {avg_loss:.3f})",
     )
