@@ -29,7 +29,7 @@ def act_fn(name: ActFn) -> Callable[[torch.Tensor], torch.Tensor]:
 def create_model(config: TrainConfig) -> nn.Module:
     if config.model_name == "ToyModel":
         model_class = ToyModel
-    if config.model_name == "LayerNormToyModel":
+    elif config.model_name == "LayerNormToyModel":
         model_class = LayerNormToyModel
     elif config.model_name in ("ReluHiddenLayerModel", "HiddenLayerModel"):
         model_class = HiddenLayerModel
