@@ -141,9 +141,9 @@ def update_values(act_fn, run_num, sparsity, model_name):
     )
     run_nos = cur.fetchall()
     train_result_no = run_nos[int(run_num)][0]
-    print(f"train_result_no: {train_result_no}")
+    # print(f"train_result_no: {train_result_no}")
     train_result = get_result(int(train_result_no))
-    print(f"train_result: {train_result}")
+    # print(f"train_result: {train_result}")
     model = train_result.model
     w = model.W.detach().numpy()
     return (
@@ -156,4 +156,4 @@ def update_values(act_fn, run_num, sparsity, model_name):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True, port=8888, host="192.168.86.201")
+    app.run_server(debug=True, host="192.168.86.201")
