@@ -2,7 +2,7 @@ env
 __pycache__
 *.ipynb
 .ipynb_checkpoints
-Easy-Transformer
+TransformerLens
 relu-variation
 residual-model
 train_results
