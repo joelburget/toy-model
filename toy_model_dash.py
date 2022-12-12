@@ -62,13 +62,7 @@ app.layout = html.Div(
             ],
             style={"display": "flex", "flex-direction": "row"},
         ),
-        html.Div(
-            [
-                fig_ln_w := dcc.Graph(figure=go.Figure()),
-                fig_ln_b := dcc.Graph(figure=go.Figure()),
-            ],
-            style={"display": "flex", "flex-direction": "row"},
-        ),
+        ln_plots := html.Div(),
         html.Div(
             [
                 fig_b := dcc.Graph(figure=go.Figure()),
@@ -122,8 +116,7 @@ app.layout = html.Div(
     Output(fig_w_square, "figure"),
     Output(fig_w, "figure"),
     Output(fig_b, "figure"),
-    Output(fig_ln_w, "figure"),
-    Output(fig_ln_b, "figure"),
+    Output(ln_plots, "children"),
     Output(fig_loss, "figure"),
     Output(run_losses, "children"),
     Input(act_fn_selector, "value"),
@@ -159,19 +152,32 @@ def update_values(act_fn, run_num, sparsity, model_name):
         train_result.model.cpu()
         plots = train_result.model.plots()
 
-    fig_ln_w = go.Figure()
-    fig_ln_b = go.Figure()
+    ln_plots = None
     if "ln_w" in plots:
-        fig_ln_w = plots["ln_w"]
-        fig_ln_b = plots["ln_b"]
+        ln_plots = html.Div(
+            [
+                html.H2("LayerNorm"),
+                html.Div(
+                    [
+                        dcc.Graph(figure=plots["ln_w"]),
+                        dcc.Graph(figure=plots["ln_b"]),
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "height": "400px",
+                    },
+                ),
+            ],
+            style={"display": "flex", "flex-direction": "column"},
+        )
 
     return (
         # weights_sankey([model.W1.detach().numpy(), model.W2.detach().numpy()]),
         plots["w_square"],
         plots["w"],
         plots["b"],
-        fig_ln_w,
-        fig_ln_b,
+        ln_plots,
         px.scatter(train_result.losses, log_y=True),
         f"losses: {formatted_losses} (average {avg_loss:.3f})",
     )
