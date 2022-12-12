@@ -59,16 +59,13 @@ def loss_fn(importance, y_pred, y_true, device="cpu"):
     return torch.mean(error**2 * importance)
 
 
+def pairwise_op(op, t):
+    t = einops.reduce(t, "batch (d 2) -> batch d", "max")
+    return einops.repeat(t, "batch d -> batch (d 2)")
+
+
 def train_model(config: TrainConfig, device="cpu"):
     return retrain_model(create_model(config), config, device)
-
-
-def pairwise(f, t):
-    size = len(t)
-    result = torch.empty(size // 2)
-    for i in range(size // 2):
-        result[i] = (t[2 * i], t[2 * i + 1])
-    return result
 
 
 def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
@@ -104,9 +101,9 @@ def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
     elif config.task == "ABS":
         task = lambda x: abs(x)
     elif config.task == "MAX":
-        task = partial(pairwise, max)
+        task = partial(pairwise_op, "max")
     elif config.task == "MIN":
-        task = partial(pairwise, min)
+        task = partial(pairwise_op, "min")
 
     losses = []
     for t in tqdm.tqdm(range(config.steps)):
