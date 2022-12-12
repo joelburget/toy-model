@@ -19,7 +19,7 @@ def notqdm(iterable, *args, **kwargs):
 
 
 @mock.patch("tqdm.auto.tqdm", notqdm)
-def go(act_fn, use_ln, s):
+def train_one(act_fn, use_ln, s):
     start = timeit.default_timer()
     print(f"starting {act_fn}, {use_ln}, {s}")
     config = TrainConfig(
@@ -53,6 +53,6 @@ if __name__ == "__main__":
     ] * DUPS
 
     with Pool(processes=16, initializer=init_pool_processes, initargs=(lock,)) as pool:
-        pool.starmap(go, configurations)
+        pool.starmap(train_one, configurations)
         pool.close()
         pool.join()
