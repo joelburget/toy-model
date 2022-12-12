@@ -1,9 +1,8 @@
 from dash import Dash, dcc, html, Input, Output
 import plotly.graph_objects as go
 import plotly.express as px
-from toy_model import sankey, weights_sankey
 import training
-from data import sparsities, TrainConfig
+from data import sparsities
 import sqlite3
 from training_db import get_result
 
@@ -26,6 +25,7 @@ app.layout = html.Div(
                         run_no_selector := dcc.RadioItems(
                             [str(i) for i in range(5)], "0"
                         ),
+                        run_losses := html.Span(""),
                     ]
                 ),
                 html.Li(
@@ -123,6 +123,7 @@ app.layout = html.Div(
     Output(fig_w_stack, "figure"),
     Output(fig_b, "figure"),
     Output(fig_loss, "figure"),
+    Output(run_losses, "children"),
     Input(act_fn_selector, "value"),
     Input(run_no_selector, "value"),
     Input(sparsity_selector, "value"),
@@ -131,6 +132,7 @@ app.layout = html.Div(
 def update_values(act_fn, run_num, sparsity, model_name):
     con = sqlite3.connect("training.db")
     cur = con.cursor()
+
     cur.execute(
         """SELECT run_no FROM training_run
            WHERE act_fn = :act_fn
@@ -140,10 +142,17 @@ def update_values(act_fn, run_num, sparsity, model_name):
         dict(act_fn=act_fn, sparsity=sparsity, model_name=model_name),
     )
     run_nos = cur.fetchall()
-    train_result_no = run_nos[int(run_num)][0]
-    # print(f"train_result_no: {train_result_no}")
+    run_nos = [i for (i,) in run_nos]
+
+    all_losses = []
+    for i in run_nos:
+        train_result = get_result(i)
+        all_losses.append(train_result.losses[-1])
+    avg_loss = sum(all_losses) / len(all_losses)
+    formatted_losses = ", ".join([f"{x:.3f}" for x in all_losses])
+
+    train_result_no = run_nos[int(run_num)]
     train_result = get_result(int(train_result_no))
-    # print(f"train_result: {train_result}")
     model = train_result.model
     w = model.W.cpu().detach().numpy()
     return (
@@ -152,6 +161,7 @@ def update_values(act_fn, run_num, sparsity, model_name):
         px.imshow(w),
         px.bar(model.b.cpu().detach().numpy()),
         px.scatter(train_result.losses, log_y=True),
+        f"losses: {formatted_losses} (average {avg_loss:.3f})",
     )
 
 
