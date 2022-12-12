@@ -93,11 +93,11 @@ def train_model(config: TrainConfig, device="cpu"):
 
     losses = []
     for t in tqdm.tqdm(range(config.steps)):
-        prediction, l1_terms = model(x_train)
+        prediction, _ = model(x_train)
         actual = task(x_train)
         loss = (
             loss_fn(config.i, prediction, actual, device=device)
-            + config.regularization_coeff * l1_terms.abs().sum()
+            # + config.regularization_coeff * l1_terms.abs().sum()
         )
         losses.append(loss.item())
         loss.backward()
