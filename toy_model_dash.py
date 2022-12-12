@@ -9,6 +9,24 @@ import torch
 
 app = Dash(__name__)
 
+
+def titled_section(title, children):
+    return html.Div(
+        [
+            html.H2(title),
+            html.Div(
+                children,
+                style={
+                    "display": "flex",
+                    "flex-direction": "row",
+                    # "height": "400px",
+                },
+            ),
+        ],
+        style={"display": "flex", "flex-direction": "column"},
+    )
+
+
 app.layout = html.Div(
     [
         html.H1("Toy Model Selector"),
@@ -47,26 +65,21 @@ app.layout = html.Div(
                 ),
             ]
         ),
-        html.H2("Loss"),
-        html.Div(
-            [
-                fig_loss := dcc.Graph(figure=go.Figure()),
-            ],
-            style={"display": "flex", "flex-direction": "row"},
+        titled_section(
+            "Loss",
+            fig_loss := dcc.Graph(figure=go.Figure()),
         ),
-        html.H2("Weights"),
-        html.Div(
+        titled_section(
+            "Weights",
             [
                 fig_w_square := dcc.Graph(figure=go.Figure()),
                 fig_w := dcc.Graph(figure=go.Figure()),
             ],
-            style={"display": "flex", "flex-direction": "row"},
         ),
         ln_plots := html.Div(),
-        html.Div(
-            [
-                fig_b := dcc.Graph(figure=go.Figure()),
-            ],
+        titled_section(
+            "Bias",
+            fig_b := dcc.Graph(figure=go.Figure()),
         ),
     ],
     style={"display": "flex", "flex-direction": "column"},
@@ -154,22 +167,12 @@ def update_values(act_fn, run_num, sparsity, model_name):
 
     ln_plots = None
     if "ln_w" in plots:
-        ln_plots = html.Div(
+        ln_plots = titled_section(
+            "LayerNorm",
             [
-                html.H2("LayerNorm"),
-                html.Div(
-                    [
-                        dcc.Graph(figure=plots["ln_w"]),
-                        dcc.Graph(figure=plots["ln_b"]),
-                    ],
-                    style={
-                        "display": "flex",
-                        "flex-direction": "row",
-                        "height": "400px",
-                    },
-                ),
+                dcc.Graph(figure=plots["ln_w"]),
+                dcc.Graph(figure=plots["ln_b"]),
             ],
-            style={"display": "flex", "flex-direction": "column"},
         )
 
     return (
