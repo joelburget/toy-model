@@ -49,16 +49,17 @@ def create_model(config: TrainConfig) -> nn.Module:
 
 
 # mean squared error weighted by feature importance
-def loss_fn(I, y_pred, y_true):
+def loss_fn(importance, y_pred, y_true, device="cpu"):
     _, features = y_pred.shape
     error = y_true - y_pred
     # importance falls off geometrically
-    importance = torch.tensor([I**i for i in range(features)])
+    importance = torch.tensor([importance**i for i in range(features)]).to(device)
     return torch.mean(error**2 * importance)
 
 
-def train_model(config: TrainConfig):
+def train_model(config: TrainConfig, device="cpu"):
     model = create_model(config)
+    model.to(device)
     features: int = model.features
 
     lower_bound, upper_bound = -10, 10
@@ -78,8 +79,8 @@ def train_model(config: TrainConfig):
         x[mask] = 0
 
     # Remove points that are completely zero
-    x_train = x_train[(x_train == 0).sum(axis=1) != features]
-    x_test = x_test[(x_test == 0).sum(axis=1) != features]
+    x_train = x_train[(x_train == 0).sum(axis=1) != features].to(device)
+    x_test = x_test[(x_test == 0).sum(axis=1) != features].to(device)
 
     # Train model
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, betas=(0.9, 0.98))
@@ -95,7 +96,7 @@ def train_model(config: TrainConfig):
         prediction, l1_terms = model(x_train)
         actual = task(x_train)
         loss = (
-            loss_fn(config.i, prediction, actual)
+            loss_fn(config.i, prediction, actual, device=device)
             + config.regularization_coeff * l1_terms.abs().sum()
         )
         losses.append(loss.item())

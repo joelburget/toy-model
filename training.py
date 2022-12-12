@@ -4,6 +4,7 @@ from training_db import insert_train_result
 from multiprocessing import Pool, Lock
 import timeit
 from unittest import mock
+import torch
 
 act_fns = ["ReLU", "GeLU", "SoLU"]
 DUPS = 5
@@ -29,7 +30,8 @@ def go(act_fn, use_ln, s):
         steps=50_000,
         act_fn=act_fn,
     )
-    train_result = train_model(config)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    train_result = train_model(config, device)
     stop = timeit.default_timer()
     print(f"{act_fn}, {use_ln}, {s} complete (after {stop - start}s), inserting")
     insert_train_result(train_result, lock)
