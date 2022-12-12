@@ -1,13 +1,16 @@
-from toy_model import train_model
-from data import TrainConfig, sparsities
-from training_db import insert_train_result
-from multiprocessing import Pool, Lock
 import timeit
-from unittest import mock
-import torch
 from collections import namedtuple
+from multiprocessing import Lock, Pool
+from typing import get_args
+from unittest import mock
 
-act_fns = ["ReLU", "GeLU", "SoLU"]
+import torch
+
+from data import ActFn, Task, TrainConfig, sparsities
+from toy_model import train_model
+from training_db import insert_train_result
+
+act_fns = get_args(ActFn)  #  ["ReLU", "GeLU", "SoLU"]
 DUPS = 5
 
 
@@ -22,20 +25,22 @@ def notqdm(iterable, *args, **kwargs):
 SizeConfig = namedtuple("SizeConfig", ["neurons", "features"])
 
 size_configs = [
-    # (5, 20),  # 5 neurons, 20 features, already trained
-    SizeConfig(40, 100),
+    SizeConfig(5, 20),  # 5 neurons, 20 features, already trained
+    # SizeConfig(40, 100),
 ]
+
+tasks = get_args(Task)
 
 
 @mock.patch("tqdm.auto.tqdm", notqdm)
-def train_one(act_fn, use_ln, s, size_config):
+def train_one(act_fn, use_ln, s, size_config, task):
     start = timeit.default_timer()
     print(f"starting {act_fn}, {use_ln}, {s}")
     config = TrainConfig(
         "LayerNormToyModel" if use_ln else "ToyModel",
         s=s,
         i=0.8,
-        task="ID",
+        task=task,
         steps=(100_000 if use_ln else 50_000),
         act_fn=act_fn,
         args=dict(
@@ -59,11 +64,12 @@ def init_pool_processes(the_lock):
 if __name__ == "__main__":
     lock = Lock()
     configurations = [
-        (act_fn, use_ln, s, size_config)
+        (act_fn, False, s, SizeConfig(5, 20), task)
         for act_fn in act_fns
-        for use_ln in (False, True)
+        # for use_ln in (False, True)
         for s in sparsities
-        for size_config in size_configs
+        # for size_config in size_configs
+        for task in ["SQUARE", "MAX", "MIN"]
     ] * DUPS
 
     with Pool(initializer=init_pool_processes, initargs=(lock,)) as pool:
