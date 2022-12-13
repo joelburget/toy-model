@@ -1,11 +1,17 @@
-from dash import Dash, dcc, html, Input, Output
-import plotly.graph_objects as go
+import sqlite3
+
 import plotly.express as px
+import plotly.graph_objects as go
+import torch
+from dash import Dash, Input, Output, dcc, html
+
 import training
 from data import sparsities
-import sqlite3
 from training_db import get_result
-import torch
+
+# from typing import List
+# from numpy.typing import NDArray
+# from toy_model import weights_sankey  # , sankey
 
 app = Dash(__name__)
 
@@ -40,15 +46,6 @@ app.layout = html.Div(
                 ),
                 html.Li(
                     [
-                        "Run number",
-                        run_no_selector := dcc.RadioItems(
-                            [str(i) for i in range(5)], "0"
-                        ),
-                        run_losses := html.Span(""),
-                    ]
-                ),
-                html.Li(
-                    [
                         "Sparsity",
                         sparsity_selector := dcc.RadioItems(
                             [str(s) for s in sparsities], "0"
@@ -61,6 +58,23 @@ app.layout = html.Div(
                         model_selector := dcc.RadioItems(
                             ["ToyModel", "LayerNormToyModel"], "ToyModel"
                         ),
+                    ]
+                ),
+                html.Li(
+                    [
+                        "Task",
+                        task_selector := dcc.RadioItems(
+                            ["ID", "SQUARE", "MAX", "MIN"], "ID"
+                        ),
+                    ]
+                ),
+                html.Li(
+                    [
+                        "Run number",
+                        run_no_selector := dcc.RadioItems(
+                            [str(i) for i in range(5)], "0"
+                        ),
+                        run_losses := html.Span(""),
                     ]
                 ),
             ]
@@ -77,6 +91,10 @@ app.layout = html.Div(
             ],
         ),
         ln_plots := html.Div(),
+        # titled_section(
+        #     "Sankey Diagram",
+        #     fig_sankey := dcc.Graph(figure=go.Figure()),
+        # ),
         titled_section(
             "Bias",
             fig_b := dcc.Graph(figure=go.Figure()),
@@ -136,8 +154,9 @@ app.layout = html.Div(
     Input(run_no_selector, "value"),
     Input(sparsity_selector, "value"),
     Input(model_selector, "value"),
+    Input(task_selector, "value"),
 )
-def update_values(act_fn, run_num, sparsity, model_name):
+def update_values(act_fn, run_num, sparsity, model_name, task_name):
     con = sqlite3.connect("training.db")
     cur = con.cursor()
 
@@ -146,8 +165,11 @@ def update_values(act_fn, run_num, sparsity, model_name):
            WHERE act_fn = :act_fn
            AND sparsity = :sparsity
            AND name = :model_name
+           AND task = :task_name
         """,
-        dict(act_fn=act_fn, sparsity=sparsity, model_name=model_name),
+        dict(
+            act_fn=act_fn, sparsity=sparsity, model_name=model_name, task_name=task_name
+        ),
     )
     run_nos = cur.fetchall()
     run_nos = [i for (i,) in run_nos]
@@ -162,8 +184,8 @@ def update_values(act_fn, run_num, sparsity, model_name):
     train_result_no = run_nos[int(run_num)]
     train_result = get_result(int(train_result_no))
     with torch.no_grad():
-        train_result.model.cpu()
-        plots = train_result.model.plots()
+        model = train_result.model.cpu()
+        plots = model.plots()
 
     ln_plots = None
     if "ln_w" in plots:
@@ -176,7 +198,7 @@ def update_values(act_fn, run_num, sparsity, model_name):
         )
 
     return (
-        # weights_sankey([model.W1.detach().numpy(), model.W2.detach().numpy()]),
+        # weights_sankey([model.W.numpy()]),
         plots["w_square"],
         plots["w"],
         plots["b"],
