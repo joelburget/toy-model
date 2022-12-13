@@ -3,11 +3,11 @@ import sqlite3
 import timeit
 import traceback
 from collections import namedtuple
-from multiprocessing import Lock, Pool
 from typing import get_args
 from unittest import mock
 
 import torch
+from torch.multiprocessing import Process
 
 from data import ActFn, Task, TrainConfig, sparsities
 from toy_model import train_model
@@ -60,20 +60,18 @@ def train_one(act_fn, use_ln, s, size_config, task):
         print(f"{timestamp}: inserting {act_fn}, {use_ln}, {s} (after {stop - start}s)")
         con = sqlite3.connect("training.db")
         cur = con.cursor()
-        insert_train_result(train_result, lock, cur, con)
-    except Exception as e:
+        insert_train_result(train_result, None, cur, con)
+    except Exception:
         print(traceback.format_exc())
         raise
 
 
-def init_pool_processes(the_lock):
-    """Initialize each process with a global variable lock."""
-    global lock
-    lock = the_lock
+def train_some(config_batch):
+    for config in config_batch:
+        train_one(*config)
 
 
 if __name__ == "__main__":
-    lock = Lock()
     configurations = [
         (act_fn, False, s, SizeConfig(5, 20), task)
         for act_fn in act_fns
@@ -83,7 +81,17 @@ if __name__ == "__main__":
         for task in ["SQUARE", "MAX", "MIN"]
     ] * DUPS
 
-    with Pool(initializer=init_pool_processes, initargs=(lock,)) as pool:
-        pool.starmap(train_one, configurations)
-        pool.close()
-        pool.join()
+    num_processes = 16
+    processes = []
+
+    work = [[]] * num_processes
+    for i in range(len(configurations)):
+        work[i % num_processes].append(configurations[i])
+
+    for config_batch in work:
+        p = Process(target=train_some, args=(config_batch,))
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
