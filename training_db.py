@@ -1,14 +1,14 @@
-import sqlite3
 import datetime
 import json
+import sqlite3
 
 from data import TrainConfig, TrainResult
 
-con = sqlite3.connect("training.db")
-cur = con.cursor()
+global_con = sqlite3.connect("training.db")
+global_cur = global_con.cursor()
 
 
-def initialize_db():
+def initialize_db(cur=global_cur):
     cur.execute(
         """CREATE TABLE training_run (
                run_no               INTEGER,
@@ -27,12 +27,12 @@ def initialize_db():
     )
 
 
-def get_next_num() -> int:
+def get_next_num(cur=global_cur) -> int:
     (count,) = cur.execute("SELECT COUNT(*) FROM training_run").fetchone()
     return count + 1
 
 
-def insert_conf(conf: TrainConfig):
+def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con):
     cur.execute(
         """INSERT INTO training_run VALUES (
                :run_no,
@@ -49,7 +49,7 @@ def insert_conf(conf: TrainConfig):
             )
         """,
         dict(
-            run_no=get_next_num(),
+            run_no=get_next_num(cur),
             name=conf.model_name,
             sparsity=conf.s,
             importance=conf.i,
@@ -65,13 +65,13 @@ def insert_conf(conf: TrainConfig):
     con.commit()
 
 
-def insert_train_result(train_result, lock=None):
+def insert_train_result(train_result, lock=None, cur=global_cur, con=global_con):
     try:
         if lock:
             lock.acquire()
         n = get_next_num()
         train_result.save(f"train_results/{n}")
-        insert_conf(train_result.config)
+        insert_conf(train_result.config, cur=cur, con=con)
     finally:
         if lock:
             lock.release()
@@ -96,7 +96,7 @@ def populate_train_config(row):
     )
 
 
-def get_config(n: int) -> TrainConfig:
+def get_config(n: int, cur=global_cur) -> TrainConfig:
     res = cur.execute("SELECT * FROM training_run WHERE run_no = ?", (n,))
     populate_train_config(res.fetchone())
 

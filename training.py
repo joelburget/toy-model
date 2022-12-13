@@ -1,4 +1,7 @@
+import datetime
+import sqlite3
 import timeit
+import traceback
 from collections import namedtuple
 from multiprocessing import Lock, Pool
 from typing import get_args
@@ -34,25 +37,33 @@ tasks = get_args(Task)
 
 @mock.patch("tqdm.auto.tqdm", notqdm)
 def train_one(act_fn, use_ln, s, size_config, task):
-    start = timeit.default_timer()
-    print(f"starting {act_fn}, {use_ln}, {s}")
-    config = TrainConfig(
-        "LayerNormToyModel" if use_ln else "ToyModel",
-        s=s,
-        i=0.8,
-        task=task,
-        steps=(100_000 if use_ln else 50_000),
-        act_fn=act_fn,
-        args=dict(
-            neurons=size_config.neurons,
-            features=size_config.features,
-        ),
-    )
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    train_result = train_model(config, device)
-    stop = timeit.default_timer()
-    print(f"inserting {act_fn}, {use_ln}, {s} (after {stop - start}s)")
-    insert_train_result(train_result, lock)
+    try:
+        start = timeit.default_timer()
+        config = TrainConfig(
+            "LayerNormToyModel" if use_ln else "ToyModel",
+            s=s,
+            i=0.8,
+            task=task,
+            steps=(100_000 if use_ln else 50_000),
+            act_fn=act_fn,
+            args=dict(
+                neurons=size_config.neurons,
+                features=size_config.features,
+            ),
+        )
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")
+        print(f"{timestamp}: training {act_fn}, {use_ln}, {s}")
+        train_result = train_model(config, device)
+        stop = timeit.default_timer()
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")
+        print(f"{timestamp}: inserting {act_fn}, {use_ln}, {s} (after {stop - start}s)")
+        con = sqlite3.connect("training.db")
+        cur = con.cursor()
+        insert_train_result(train_result, lock, cur, con)
+    except Exception as e:
+        print(traceback.format_exc())
+        raise
 
 
 def init_pool_processes(the_lock):
