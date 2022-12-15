@@ -38,7 +38,7 @@ def foldable_section(title, *children):
 
 
 def slider():
-    return daq.Slider(min=-10, max=10, value=0, marks={"0": "0"})
+    return daq.Slider(min=0, max=10, value=0, marks={"0": "0"})
 
 
 app.layout = rows(

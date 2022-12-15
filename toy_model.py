@@ -72,7 +72,7 @@ def train_model(config: TrainConfig, device="cpu"):
 
 def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
     features: int = model.features
-    lower_bound, upper_bound = -10, 10
+    lower_bound, upper_bound = 0, 10
 
     model.to(device)
 
