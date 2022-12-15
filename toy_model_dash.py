@@ -74,7 +74,7 @@ app.layout = rows(
                         rows(
                             [
                                 run_no_selector := dcc.RadioItems(
-                                    [str(i) for i in range(5)],
+                                    [],
                                     "0",
                                     style={
                                         "display": "flex",
@@ -169,6 +169,7 @@ def update_run_nums(act_fn, sparsity, task_name):
 
 @app.callback(
     Output(run_no_selector, "options"),
+    Output(run_no_selector, "value"),
     Output(avg_loss, "children"),
     Input(train_result_nums, "data"),
 )
@@ -176,20 +177,20 @@ def update_run_selector(train_result_nums):
     run_nums = json.loads(train_result_nums)
 
     if len(run_nums) == 0:
-        return [], ""
+        return [], 0, ""
 
-    all_losses = []
+    all_losses = dict()
     for i in run_nums:
         train_result = get_result(i)
-        all_losses.append(train_result.losses[-1])
+        all_losses[i] = train_result.losses[-1]
     avg_loss = sum(all_losses) / len(all_losses)
 
-    options = [
-        dict(label=f"{i}: {all_losses[i]:.3f}", value=i) for i in range(len(run_nums))
-    ]
+    # print(f"run_nums: {run_nums}")
+    options = [dict(label=f"{i}: {all_losses[i]:.3f}", value=i) for i in run_nums]
 
     return (
         options,
+        run_nums[0],
         f"average loss {avg_loss:.3f}",
     )
 
@@ -201,14 +202,14 @@ def update_run_selector(train_result_nums):
 )
 def get_model(train_result_nums, run_num):
     run_nums = json.loads(train_result_nums)
+    # print(f"train_result_nums: {train_result_nums}")
+    # print(f"run_nums: {run_nums}")
 
     if len(run_nums) == 0:
-        return (None, None, None, [], None)
+        return 1
 
-    run_num = int(run_num)
-    run_num = min(run_num, len(run_nums) - 1)
-    train_result_no = run_nums[int(run_num)]
-    return int(train_result_no)
+    # print(f"train_result_no: {run_num}")
+    return int(run_num)
 
 
 @app.callback(
