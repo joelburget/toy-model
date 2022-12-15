@@ -14,7 +14,7 @@ from toy_model import train_model
 from training_db import insert_train_result
 
 act_fns = get_args(ActFn)  #  ["ReLU", "GeLU", "SoLU"]
-DUPS = 5
+DUPS = 2
 
 
 def notqdm(iterable, *args, **kwargs):
@@ -78,7 +78,7 @@ if __name__ == "__main__":
         # for use_ln in (False, True)
         for s in sparsities
         # for size_config in size_configs
-        for task in ["SQUARE", "MAX", "MIN"]
+        for task in ["ID", "SQUARE", "MAX", "MIN"]
     ] * DUPS
 
     num_processes = 16
