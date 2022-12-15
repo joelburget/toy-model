@@ -32,7 +32,9 @@ def get_next_num(cur=global_cur) -> int:
     return count + 1
 
 
-def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con):
+def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con, run_no=None):
+    if run_no is None:
+        run_no = get_next_num(cur)
     cur.execute(
         """INSERT INTO training_run VALUES (
                :run_no,
@@ -49,7 +51,7 @@ def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con):
             )
         """,
         dict(
-            run_no=get_next_num(cur),
+            run_no=run_no,
             name=conf.model_name,
             sparsity=conf.s,
             importance=conf.i,
