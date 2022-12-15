@@ -1,3 +1,4 @@
+import math
 from functools import partial
 from typing import Callable, List
 
@@ -10,6 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import tqdm.auto as tqdm
+from colour import Color
 from numpy.typing import NDArray
 
 from data import ActFn, TrainConfig, TrainResult
@@ -143,11 +145,22 @@ def stack_plot(w):
     return stack_plot_df(mk_dataframe(w))
 
 
-def sankey(title: str, sources, targets, values, node_names, layer_shapes):
+def generic_sankey(title: str, sources, targets, values, node_names, layer_shapes):
     colors, labels, xs, ys = [], [], [], []
 
+    most_neg, most_pos = math.inf, -math.inf
+    for v in values:
+        most_neg = min(v, most_neg)
+        most_pos = max(v, most_pos)
+
+    color_range = most_pos - most_neg
+    color_options = list(Color("blue").range_to(Color("red"), 100))
+
     for i in range(len(values)):
-        colors.append("rgba(255,0,0, 0.3)" if values[i] > 0 else "rgba(0,0,255, 0.3)")
+        color = color_options[
+            math.floor((values[i] - most_neg) * 99 / color_range)
+        ].hex_l
+        colors.append(color)
         labels.append(f"{values[i]:.3f}")
         values[i] = abs(values[i])
 
@@ -182,7 +195,7 @@ def sankey(title: str, sources, targets, values, node_names, layer_shapes):
     )
 
 
-def trace_sankey(layers: List[torch.tensor]):
+def activations_sankey(layers: List[torch.tensor]):
     nodes_seen = 0
     sources, targets, values, node_names = [], [], [], []
 
@@ -206,7 +219,7 @@ def trace_sankey(layers: List[torch.tensor]):
     layer_shapes = [layers[0].shape[1], layers[0].shape[0]]
     layer_shapes += [layer.shape[0] for layer in layers[1:]]
 
-    return sankey(
+    return generic_sankey(
         "Activations for Given Inputs",
         sources,
         targets,
@@ -243,7 +256,84 @@ def weights_sankey(layers: List[NDArray]):
     layer_shapes = [layers[0].shape[1], layers[0].shape[0]]
     layer_shapes += [layer.shape[0] for layer in layers[1:]]
 
-    return sankey("Weights", sources, targets, values, node_names, layer_shapes)
+    return generic_sankey("Weights", sources, targets, values, node_names, layer_shapes)
+
+
+def activations_graph(layer_cache):
+    layer_node_count = [len(layer[0]) for layer in layer_cache]
+
+    node_nums = []
+    for layer in layer_node_count:
+        node_count = sum(len(layer) for layer in node_nums)
+        node_nums.append([i + node_count for i in range(layer)])
+
+    def connected(l1, l2):
+        return [(i, j) for i in node_nums[l1] for j in node_nums[l2]]
+
+    def pointwise(l1, l2):
+        return [(node_nums[l1][i], node_nums[l2][i]) for i in range(len(node_nums[l1]))]
+
+    edges = connected(0, 1) + connected(1, 2) + pointwise(2, 3) + pointwise(3, 4)
+
+    most_neg, most_pos = math.inf, -math.inf
+    for layer in layer_cache:
+        for v in layer[0]:
+            most_neg = min(v.item(), most_neg)
+            most_pos = max(v.item(), most_pos)
+
+    color_range = most_pos - most_neg
+    color_options = list(Color("blue").range_to(Color("red"), 100))
+
+    activations = []
+    colors = []
+    for layer in layer_cache:
+        activations += [v.item() for v in layer[0]]
+        for v in layer[0]:
+            colors.append(
+                color_options[
+                    math.floor((v.item() - most_neg) * 99 / color_range)
+                ].hex_l
+            )
+
+    labels = [f"{x:.4f}" for x in activations]
+
+    Xn, Yn = [], []
+    xs_space = np.linspace(0.01, 2.99, len(layer_node_count))
+    for layer_num, n_rows in enumerate(layer_node_count):
+        Xn += [xs_space[layer_num]] * n_rows
+        Yn += list(np.linspace(1.99, 0.01, n_rows))
+
+    Xe, Ye = [], []
+    for edge in edges:
+        Xe += [Xn[edge[0]], Xn[edge[1]], None]
+        Ye += [Yn[edge[0]], Yn[edge[1]], None]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=Xe,
+            y=Ye,
+            mode="lines",
+            marker=dict(
+                color="rgba(0, 0, 255, 0.2)",
+            ),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=Xn,
+            y=Yn,
+            mode="markers",
+            text=labels,
+            hoverinfo="text",
+            opacity=0.7,
+            marker=dict(
+                size=10,
+                color=colors,
+            ),
+        )
+    )
+    return fig
 
 
 class ToyModel(nn.Module):
@@ -254,12 +344,18 @@ class ToyModel(nn.Module):
         self.W = nn.Parameter(torch.randn(neurons, features))
         self.b = nn.Parameter(torch.randn(features))
         self.act_fn = act_fn
+        self.layer_cache = []
 
     def forward(self, x):
+        self.layer_cache.append(x)
         x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
+        self.layer_cache.append(x)
         x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
+        self.layer_cache.append(x)
         x = x + self.b
+        self.layer_cache.append(x)
         x = act_fn(self.act_fn)(x)
+        self.layer_cache.append(x)
         return x, 0
 
     @staticmethod
@@ -268,12 +364,22 @@ class ToyModel(nn.Module):
         px.imshow((w.T @ w)).show()
         px.imshow(w).show()
 
+    def activations_graph(self, inputs):
+        self.layer_cache = []
+        self.forward(inputs)
+        return activations_graph(self.layer_cache)
+
     def plots(self):
         w = self.W.cpu().detach().numpy()
         return dict(
             w_square=px.imshow((w.T @ w), title="w.T @ w"),
             w=px.imshow(w, title="w"),
             b=px.bar(self.b.cpu().detach().numpy(), title="b"),
+            weights_sankey=weights_sankey([w, w.T]),
+            # activations_sankey(
+            #     [w],
+            #     np.array([input_0, input_1, input_2]),
+            # ),
         )
 
 

@@ -1,5 +1,7 @@
+import json
 import sqlite3
 
+import dash_daq as daq
 import plotly.express as px
 import plotly.graph_objects as go
 import torch
@@ -9,42 +11,48 @@ import training
 from data import sparsities
 from training_db import get_result
 
-# from typing import List
-# from numpy.typing import NDArray
-# from toy_model import weights_sankey  # , sankey
-
 app = Dash(__name__)
 
 
-def titled_section(title, children):
+def rows(children):
     return html.Div(
-        [
-            html.H2(title),
-            html.Div(
-                children,
-                style={
-                    "display": "flex",
-                    "flex-direction": "row",
-                    # "height": "400px",
-                },
-            ),
-        ],
+        children,
         style={"display": "flex", "flex-direction": "column"},
     )
 
 
-app.layout = html.Div(
+def cols(children):
+    return html.Div(
+        children,
+        style={"display": "flex", "flex-direction": "row"},
+    )
+
+
+def foldable_section(title, *children):
+    return html.Details(
+        [
+            html.Summary(title),
+            *children,
+        ],
+    )
+
+
+def slider():
+    return daq.Slider(min=-10, max=10, value=0, marks={"0": "0"})
+
+
+app.layout = rows(
     [
         html.H1("Toy Model Selector"),
-        html.Ul(
+        rows(
             [
-                html.Li(
+                cols(
                     [
                         "Activation Function",
                         act_fn_selector := dcc.RadioItems(training.act_fns, "ReLU"),
                     ]
                 ),
-                html.Li(
+                cols(
                     [
                         "Sparsity",
                         sparsity_selector := dcc.RadioItems(
@@ -52,15 +60,7 @@ app.layout = html.Div(
                         ),
                     ]
                 ),
-                html.Li(
-                    [
-                        "Model",
-                        model_selector := dcc.RadioItems(
-                            ["ToyModel", "LayerNormToyModel"], "ToyModel"
-                        ),
-                    ]
-                ),
-                html.Li(
+                cols(
                     [
                         "Task",
                         task_selector := dcc.RadioItems(
@@ -68,144 +68,263 @@ app.layout = html.Div(
                         ),
                     ]
                 ),
-                html.Li(
+                cols(
                     [
                         "Run number",
-                        run_no_selector := dcc.RadioItems(
-                            [str(i) for i in range(5)], "0"
+                        rows(
+                            [
+                                run_no_selector := dcc.RadioItems(
+                                    [str(i) for i in range(5)],
+                                    "0",
+                                    style={
+                                        "display": "flex",
+                                        "flex-direction": "column",
+                                    },
+                                ),
+                                avg_loss := html.Span(""),
+                            ]
                         ),
-                        run_losses := html.Span(""),
                     ]
                 ),
             ]
         ),
-        titled_section(
+        foldable_section(
             "Loss",
             fig_loss := dcc.Graph(figure=go.Figure()),
         ),
-        titled_section(
+        foldable_section(
+            "Activations Graph",
+            rows(
+                [
+                    input0 := slider(),
+                    input1 := slider(),
+                    input2 := slider(),
+                    input3 := slider(),
+                    input4 := slider(),
+                    input5 := slider(),
+                    input6 := slider(),
+                    input7 := slider(),
+                    input8 := slider(),
+                    input9 := slider(),
+                    input10 := slider(),
+                    input11 := slider(),
+                    input12 := slider(),
+                    input13 := slider(),
+                    input14 := slider(),
+                    input15 := slider(),
+                    input16 := slider(),
+                    input17 := slider(),
+                    input18 := slider(),
+                    input19 := slider(),
+                ],
+            ),
+            fig_activations_graph := dcc.Graph(figure=go.Figure()),
+        ),
+        foldable_section(
             "Weights",
-            [
-                fig_w_square := dcc.Graph(figure=go.Figure()),
-                fig_w := dcc.Graph(figure=go.Figure()),
-            ],
+            cols(
+                [
+                    fig_w_square := dcc.Graph(figure=go.Figure()),
+                    fig_w := dcc.Graph(figure=go.Figure()),
+                ]
+            ),
         ),
         ln_plots := html.Div(),
-        # titled_section(
-        #     "Sankey Diagram",
-        #     fig_sankey := dcc.Graph(figure=go.Figure()),
-        # ),
-        titled_section(
+        foldable_section(
+            "Sankey Diagram",
+            fig_weights_sankey := dcc.Graph(figure=go.Figure()),
+        ),
+        foldable_section(
             "Bias",
             fig_b := dcc.Graph(figure=go.Figure()),
         ),
-    ],
-    style={"display": "flex", "flex-direction": "column"},
+        train_result_nums := dcc.Store(id="train-result-nums"),
+        train_result_no := dcc.Store(id="train-result-no"),
+    ]
 )
-
-
-# def activations_sankey(layers: List[NDArray], inputs: NDArray):
-#     for x in inputs:
-#         if x is None:
-#             return go.Figure(layout_title_text="(invalid input)")
-
-#     nodes_seen = 0
-#     sources, targets, values, node_names = [], [], [], []
-
-#     node_names += [f"I{i}={x:.3f}" for i, x in enumerate(inputs)]
-#     prev_layer_acts = inputs
-
-#     for layer_num, layer in enumerate(layers):
-#         n_rows, n_cols = layer.shape
-#         activations = layer @ prev_layer_acts
-#         layer_name = chr(layer_num + ord("A"))
-#         node_names += [f"{layer_name}{i}={x:.3f}" for i, x in enumerate(activations)]
-#         for i in range(n_cols):
-#             for j in range(n_rows):
-#                 sources.append(nodes_seen + i)
-#                 targets.append(nodes_seen + len(prev_layer_acts) + j)
-#                 values.append(layer[j, i] * prev_layer_acts[i])
-#         nodes_seen += len(prev_layer_acts)
-#         prev_layer_acts = activations
-
-#     # XXX transpose?
-#     layer_shapes = [layers[0].shape[1], layers[0].shape[0]]
-#     layer_shapes += [layer.shape[0] for layer in layers[1:]]
-
-#     return sankey(
-#         "Activations for Given Inputs",
-#         sources,
-#         targets,
-#         values,
-#         node_names,
-#         layer_shapes,
-#     )
 
 
 @app.callback(
-    # Output(fig_sankey, "figure"),
-    Output(fig_w_square, "figure"),
-    Output(fig_w, "figure"),
-    Output(fig_b, "figure"),
-    Output(ln_plots, "children"),
-    Output(fig_loss, "figure"),
-    Output(run_losses, "children"),
+    Output(train_result_nums, "data"),
     Input(act_fn_selector, "value"),
-    Input(run_no_selector, "value"),
     Input(sparsity_selector, "value"),
-    Input(model_selector, "value"),
     Input(task_selector, "value"),
 )
-def update_values(act_fn, run_num, sparsity, model_name, task_name):
-    con = sqlite3.connect("training.db")
+def update_run_nums(act_fn, sparsity, task_name):
+    con = sqlite3.connect("new.db")
     cur = con.cursor()
-
     cur.execute(
         """SELECT run_no FROM training_run
-           WHERE act_fn = :act_fn
+           WHERE name = 'ToyModel'
+           AND act_fn = :act_fn
            AND sparsity = :sparsity
-           AND name = :model_name
            AND task = :task_name
         """,
-        dict(
-            act_fn=act_fn, sparsity=sparsity, model_name=model_name, task_name=task_name
-        ),
+        dict(act_fn=act_fn, sparsity=sparsity, task_name=task_name),
     )
+
     run_nos = cur.fetchall()
-    run_nos = [i for (i,) in run_nos]
+    return json.dumps([i for (i,) in run_nos])
+
+
+@app.callback(
+    Output(run_no_selector, "options"),
+    Output(avg_loss, "children"),
+    Input(train_result_nums, "data"),
+)
+def update_run_selector(train_result_nums):
+    run_nums = json.loads(train_result_nums)
+
+    if len(run_nums) == 0:
+        return [], ""
 
     all_losses = []
-    for i in run_nos:
+    for i in run_nums:
         train_result = get_result(i)
         all_losses.append(train_result.losses[-1])
     avg_loss = sum(all_losses) / len(all_losses)
-    formatted_losses = ", ".join([f"{x:.3f}" for x in all_losses])
 
-    train_result_no = run_nos[int(run_num)]
+    options = [
+        dict(label=f"{i}: {all_losses[i]:.3f}", value=i) for i in range(len(run_nums))
+    ]
+
+    return (
+        options,
+        f"average loss {avg_loss:.3f}",
+    )
+
+
+@app.callback(
+    Output(train_result_no, "data"),
+    Input(train_result_nums, "data"),
+    Input(run_no_selector, "value"),
+)
+def get_model(train_result_nums, run_num):
+    run_nums = json.loads(train_result_nums)
+
+    if len(run_nums) == 0:
+        return (None, None, None, [], None)
+
+    run_num = int(run_num)
+    run_num = min(run_num, len(run_nums) - 1)
+    train_result_no = run_nums[int(run_num)]
+    return int(train_result_no)
+
+
+@app.callback(
+    Output(fig_w_square, "figure"),
+    Output(fig_w, "figure"),
+    Output(fig_b, "figure"),
+    Output(fig_weights_sankey, "figure"),
+    Output(ln_plots, "children"),
+    Output(fig_loss, "figure"),
+    Input(train_result_no, "data"),
+)
+def update_plots(train_result_no):
     train_result = get_result(int(train_result_no))
+
     with torch.no_grad():
         model = train_result.model.cpu()
-        plots = model.plots()
+    plots = model.plots()
 
     ln_plots = None
     if "ln_w" in plots:
-        ln_plots = titled_section(
+        ln_plots = foldable_section(
             "LayerNorm",
-            [
-                dcc.Graph(figure=plots["ln_w"]),
-                dcc.Graph(figure=plots["ln_b"]),
-            ],
+            cols(
+                [
+                    dcc.Graph(figure=plots["ln_w"]),
+                    dcc.Graph(figure=plots["ln_b"]),
+                ]
+            ),
         )
 
     return (
-        # weights_sankey([model.W.numpy()]),
         plots["w_square"],
         plots["w"],
         plots["b"],
+        plots["weights_sankey"],
         ln_plots,
         px.scatter(train_result.losses, log_y=True),
-        f"losses: {formatted_losses} (average {avg_loss:.3f})",
     )
+
+
+@app.callback(
+    Output(fig_activations_graph, "figure"),
+    Input(input0, "value"),
+    Input(input1, "value"),
+    Input(input2, "value"),
+    Input(input3, "value"),
+    Input(input4, "value"),
+    Input(input5, "value"),
+    Input(input6, "value"),
+    Input(input7, "value"),
+    Input(input8, "value"),
+    Input(input9, "value"),
+    Input(input10, "value"),
+    Input(input11, "value"),
+    Input(input12, "value"),
+    Input(input13, "value"),
+    Input(input14, "value"),
+    Input(input15, "value"),
+    Input(input16, "value"),
+    Input(input17, "value"),
+    Input(input18, "value"),
+    Input(input19, "value"),
+    Input(train_result_no, "data"),
+)
+def update_activations_graph(
+    input0,
+    input1,
+    input2,
+    input3,
+    input4,
+    input5,
+    input6,
+    input7,
+    input8,
+    input9,
+    input10,
+    input11,
+    input12,
+    input13,
+    input14,
+    input15,
+    input16,
+    input17,
+    input18,
+    input19,
+    train_result_no,
+):
+    train_result = get_result(int(train_result_no))
+    input = torch.zeros((1, 20))
+    input[0] = torch.tensor(
+        [
+            input0,
+            input1,
+            input2,
+            input3,
+            input4,
+            input5,
+            input6,
+            input7,
+            input8,
+            input9,
+            input10,
+            input11,
+            input12,
+            input13,
+            input14,
+            input15,
+            input16,
+            input17,
+            input18,
+            input19,
+        ]
+    )
+    with torch.no_grad():
+        model = train_result.model.cpu()
+    return model.activations_graph(input)
 
 
 if __name__ == "__main__":
