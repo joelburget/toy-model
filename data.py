@@ -1,7 +1,7 @@
 import os
 import pickle
 from dataclasses import dataclass, field
-from typing import List, Literal
+from typing import List, Literal, Tuple
 
 import torch
 import torch.nn as nn
@@ -41,6 +41,7 @@ class TrainResult:
     losses: List[float]
     train: torch.Tensor
     test: torch.Tensor
+    checkpoints: List[Tuple[int, dict]] = field(default_factory=list)
 
     def save(self, path, mkdir=True):
         if mkdir:
@@ -54,10 +55,23 @@ class TrainResult:
                 pickle.dump(attribute, f)
 
     @classmethod
-    def load(cls, path):
+    def load(cls, path, load_checkpoints=False):
         my_model = {}
-        for name in cls.__annotations__:
+        annotations = cls.__annotations__.copy()
+        del annotations["checkpoints"]
+
+        for name in annotations:
             file_name = ".".join((name, "pkl"))
             with open("/".join((path, file_name)), "rb") as f:
                 my_model[name] = pickle.load(f)
+
+        if load_checkpoints:
+            try:
+                with open("/".join((path, "checkpoints.pkl")), "rb") as f:
+                    my_model["checkpoints"] = pickle.load(f)
+            except FileNotFoundError:
+                my_model["checkpoints"] = []
+        else:
+            my_model["checkpoints"] = []
+
         return cls(**my_model)
