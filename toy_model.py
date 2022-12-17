@@ -1,4 +1,5 @@
 import math
+from copy import deepcopy
 from functools import partial
 from typing import Callable, List
 
@@ -66,23 +67,25 @@ def pairwise_op(op, t):
     return einops.repeat(t, "batch d -> batch (d 2)")
 
 
-def train_model(config: TrainConfig, device="cpu"):
-    return retrain_model(create_model(config), config, device)
+def train_model(config: TrainConfig, device="cpu", checkpoint_every=None):
+    return retrain_model(create_model(config), config, device, checkpoint_every)
 
 
-def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
+def retrain_model(
+    model: nn.Module,
+    config: TrainConfig,
+    device="cpu",
+    checkpoint_every=None,
+    checkpoints=None,
+):
     features: int = model.features
-    lower_bound, upper_bound = 0, 10
+    bounds = -10, 10
 
     model.to(device)
 
     # Start with random data
-    x_train = torch.FloatTensor(config.points, features).uniform_(
-        lower_bound, upper_bound
-    )
-    x_test = torch.FloatTensor(config.points * 2, features).uniform_(
-        lower_bound, upper_bound
-    )
+    x_train = torch.FloatTensor(config.points, features).uniform_(*bounds)
+    x_test = torch.FloatTensor(config.points * 2, features).uniform_(*bounds)
 
     # Then apply sparsity
     for x in [x_train, x_test]:
@@ -108,9 +111,13 @@ def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
         task = partial(pairwise_op, "min")
 
     losses = []
-    for t in tqdm.tqdm(range(config.steps)):
+    if checkpoints is None:
+        checkpoints = []
+    for i, t in enumerate(tqdm.tqdm(range(config.steps))):
         prediction, _ = model(x_train)
         actual = task(x_train)
+        if checkpoint_every and i % checkpoint_every == 0:
+            checkpoints.append((i, deepcopy(model.state_dict())))
         loss = (
             loss_fn(config.i, prediction, actual, device=device)
             # + config.regularization_coeff * l1_terms.abs().sum()
@@ -120,7 +127,7 @@ def retrain_model(model: nn.Module, config: TrainConfig, device="cpu"):
         optimizer.step()
         optimizer.zero_grad()
 
-    return TrainResult(model, config, losses, x_train, x_test)
+    return TrainResult(model, config, losses, x_train, x_test, checkpoints)
 
 
 def stack_plot_df(w):
@@ -259,7 +266,7 @@ def weights_sankey(layers: List[NDArray]):
     return generic_sankey("Weights", sources, targets, values, node_names, layer_shapes)
 
 
-def activations_graph(layer_cache):
+def activations_graph(connection_types, layer_cache):
     layer_node_count = [len(layer[0]) for layer in layer_cache]
 
     node_nums = []
@@ -273,7 +280,13 @@ def activations_graph(layer_cache):
     def pointwise(l1, l2):
         return [(node_nums[l1][i], node_nums[l2][i]) for i in range(len(node_nums[l1]))]
 
-    edges = connected(0, 1) + connected(1, 2) + pointwise(2, 3) + pointwise(3, 4)
+    # edges = connected(0, 1) + connected(1, 2) + pointwise(2, 3) + pointwise(3, 4)
+    edges = []
+    for i, ty in enumerate(connection_types):
+        if ty == "CONNECTED":
+            edges += connected(i, i + 1)
+        else:
+            edges += pointwise(i, i + 1)
 
     most_neg, most_pos = math.inf, -math.inf
     for layer in layer_cache:
@@ -347,27 +360,29 @@ class ToyModel(nn.Module):
         self.layer_cache = []
 
     def forward(self, x):
-        self.layer_cache.append(x)
+        # self.layer_cache.append(x)
         x = einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
-        self.layer_cache.append(x)
+        # self.layer_cache.append(x)
         x = einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
-        self.layer_cache.append(x)
+        # self.layer_cache.append(x)
         x = x + self.b
-        self.layer_cache.append(x)
+        # self.layer_cache.append(x)
         x = act_fn(self.act_fn)(x)
-        self.layer_cache.append(x)
+        # self.layer_cache.append(x)
         return x, 0
 
-    @staticmethod
-    def plot(train_result):
-        w = train_result.model.W.detach().numpy()
-        px.imshow((w.T @ w)).show()
-        px.imshow(w).show()
+    # @staticmethod
+    # def plot(train_result):
+    #     w = train_result.model.W.detach().numpy()
+    #     px.imshow((w.T @ w)).show()
+    #     px.imshow(w).show()
 
     def activations_graph(self, inputs):
         self.layer_cache = []
         self.forward(inputs)
-        return activations_graph(self.layer_cache)
+        return activations_graph(
+            ["CONNECTED", "CONNECTED", "POINTWISE", "POINTWISE"], self.layer_cache
+        )
 
     def plots(self):
         w = self.W.cpu().detach().numpy()
@@ -416,15 +431,15 @@ class LayerNormToyModel(nn.Module):
         x = self.ln(x)
         return x, 0
 
-    @staticmethod
-    def plot(train_result):
-        model = train_result.model
-        ln = model.ln
-        w = model.W.detach().numpy()
-        px.imshow((w.T @ w), title="w.T @ w").show()
-        px.imshow(w).show()
-        px.bar(ln.w.detach().numpy(), title="LN W").show()
-        px.bar(ln.b.detach().numpy(), title="LN B").show()
+    # @staticmethod
+    # def plot(train_result):
+    #     model = train_result.model
+    #     ln = model.ln
+    #     w = model.W.detach().numpy()
+    #     px.imshow((w.T @ w), title="w.T @ w").show()
+    #     px.imshow(w).show()
+    #     px.bar(ln.w.detach().numpy(), title="LN W").show()
+    #     px.bar(ln.b.detach().numpy(), title="LN B").show()
 
     def plots(self):
         w = self.W.detach().numpy()
@@ -445,20 +460,44 @@ class HiddenLayerModel(nn.Module):
         self.W = nn.Parameter(torch.randn(neurons, features))
         self.b = nn.Parameter(torch.randn(features))
         self.act_fn = act_fn
+        self.layer_cache = []
+
+    def cache(self, layer):
+        if not self.training:
+            self.layer_cache.append(layer)
+        return layer
 
     def forward(self, x):
+        self.cache(x)
         f = act_fn(self.act_fn)
-        h = f(einops.einsum(self.W, x, "inner outer, batch outer -> batch inner"))
-        x_ = f(
-            einops.einsum(self.W.T, h, "outer inner, batch inner -> batch outer")
-            + self.b
+        x = self.cache(
+            einops.einsum(self.W, x, "inner outer, batch outer -> batch inner")
         )
-        return x_, h
+        x = self.cache(f(x))
+        x = self.cache(
+            einops.einsum(self.W.T, x, "outer inner, batch inner -> batch outer")
+        )
+        x = self.cache(x + self.b)
+        x = self.cache(f(x))
+        return x, 0  # h
 
-    @staticmethod
-    def plot(train_result):
-        w = train_result.model.W.detach().numpy()
-        px.imshow(w.T).show()
+    def plots(self):
+        w = self.W.cpu().detach().numpy()
+        b = self.b.cpu().detach().numpy()
+        return dict(
+            w1=px.imshow((w.T @ w), title="w.T @ w"),
+            w2=px.imshow(w, title="w"),
+            b=px.bar(b, title="b"),
+            weights_sankey=weights_sankey([w, w.T]),
+        )
+
+    def activations_graph(self, inputs):
+        self.layer_cache = []
+        self.forward(inputs)
+        return activations_graph(
+            ["CONNECTED", "POINTWISE", "CONNECTED", "POINTWISE", "POINTWISE"],
+            self.layer_cache,
+        )
 
 
 class HiddenLayerModelVariation(nn.Module):
@@ -473,7 +512,8 @@ class HiddenLayerModelVariation(nn.Module):
         self.layer_cache = []
 
     def cache(self, layer):
-        self.layer_cache.append(layer)
+        if not self.training:
+            self.layer_cache.append(layer)
         return layer
 
     def forward(self, x):
@@ -490,18 +530,24 @@ class HiddenLayerModelVariation(nn.Module):
         x = self.cache(f(x))
         return x, 0
 
-    @staticmethod
-    def plots(train_result):
-        model = train_result.model
-        w1 = model.W1.detach().numpy()
-        w2 = model.W2.detach().numpy()
+    def plots(self):
+        w1 = self.W1.cpu().detach().numpy()
+        w2 = self.W2.cpu().detach().numpy()
+        b = self.b.cpu().detach().numpy()
+        return dict(
+            w1=px.imshow((w2 @ w1), title="w2 @ w1"),
+            # w1=px.imshow(w1.T, title="w1"),
+            w2=px.imshow(w2, title="w2"),
+            b=px.bar(b, title="bias"),
+            weights_sankey=weights_sankey([w1, w2]),
+        )
 
-        return (
-            px.imshow(w1.T, title="W1"),
-            stack_plot(w1),
-            px.imshow(w2, title="W2"),
-            stack_plot(w2.T),
-            px.bar(model.b.detach().numpy(), title="bias"),
+    def activations_graph(self, inputs):
+        self.layer_cache = []
+        self.forward(inputs)
+        return activations_graph(
+            ["CONNECTED", "POINTWISE", "CONNECTED", "POINTWISE", "POINTWISE"],
+            self.layer_cache,
         )
 
 
