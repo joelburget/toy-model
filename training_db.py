@@ -4,7 +4,7 @@ import sqlite3
 
 from data import TrainConfig, TrainResult
 
-global_con = sqlite3.connect("training.db")
+global_con = sqlite3.connect("hidden_layer.db")
 global_cur = global_con.cursor()
 
 
@@ -32,12 +32,16 @@ def get_next_num(cur=global_cur) -> int:
     return count + 1
 
 
-def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con, run_no=None):
-    if run_no is None:
-        run_no = get_next_num(cur)
+def insert_conf(
+    conf: TrainConfig, cur=global_cur, con=global_con, run_id=None, created=None
+):
+    if run_id is None:
+        run_id = get_next_num(cur)
+    if created is None:
+        created = datetime.datetime.now()
     cur.execute(
         """INSERT INTO training_run VALUES (
-               :run_no,
+               :run_id,
                :name,
                :sparsity,
                :importance,
@@ -51,7 +55,7 @@ def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con, run_no=None):
             )
         """,
         dict(
-            run_no=run_no,
+            run_id=run_id,
             name=conf.model_name,
             sparsity=conf.s,
             importance=conf.i,
@@ -61,7 +65,7 @@ def insert_conf(conf: TrainConfig, cur=global_cur, con=global_con, run_no=None):
             regularization_coeff=conf.regularization_coeff,
             act_fn=conf.act_fn,
             args=json.dumps(conf.args),
-            created=datetime.datetime.now(),
+            created=created,
         ),
     )
     con.commit()
@@ -103,8 +107,8 @@ def get_config(n: int, cur=global_cur) -> TrainConfig:
     populate_train_config(res.fetchone())
 
 
-def get_result(n: int) -> TrainResult:
-    return TrainResult.load(f"train_results/{n}")
+def get_result(n: int, load_checkpoints=False) -> TrainResult:
+    return TrainResult.load(f"train_results/{n}", load_checkpoints)
 
 
 if __name__ == "__main__":
