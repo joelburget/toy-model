@@ -1,12 +1,13 @@
-from multiprocessing import Pool
-import timeit
-import torch
-from unittest import mock
-import sqlite3
 import datetime
+import sqlite3
+import timeit
+from multiprocessing import Pool
+from unittest import mock
 
-from training_db import get_result
+import torch
+
 from toy_model import retrain_model
+from training_db import get_result
 
 
 def notqdm(iterable, *args, **kwargs):
@@ -22,12 +23,13 @@ def train_one(n):
     start = timeit.default_timer()
     print(f"starting {n}")
 
-    previous_result = get_result(n)
+    previous_result = get_result(n, load_checkpoints=True)
     config = previous_result.config
     model = previous_result.model
+    checkpoints = previous_result.checkpoints
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    train_result = retrain_model(model, config, device)
+    train_result = retrain_model(model, config, device, checkpoints=checkpoints)
 
     stop = timeit.default_timer()
     print(f"{n} complete (after {stop - start}s), updating")
